@@ -19,6 +19,39 @@ Aplikasi ini membantu UMKM es teh untuk:
 - Mengelola menu dan resep (bahan per gelas)
 - Menambah menu baru melalui form dengan validasi input
 
+## Screenshot Aplikasi
+
+Screenshot berikut diambil langsung dari aplikasi yang berjalan (Flutter Web di Chrome,
+viewport 420×900). Data yang dipakai adalah data simulasi aplikasi.
+
+### 1. Form Tambah Menu
+
+Halaman form dengan empat kolom input: Nama Menu, Kategori (dropdown),
+Harga, dan Ketersediaan (switch).
+
+![Form Tambah Menu](screenshots/form-tambah-menu.png)
+
+### 2. Validasi Input
+
+Ketika tombol **Simpan Menu** ditekan dalam keadaan kosong, setiap kolom
+menampilkan pesan kesalahan dan SnackBar merah "Periksa kembali data yang dimasukkan" muncul.
+
+![Validasi Form](screenshots/validasi-form.png)
+
+### 3. Berhasil Menambah Menu
+
+Setelah data valid disimpan, muncul SnackBar hijau
+"Menu "Es Teh Melon" berhasil ditambahkan" dan menu baru langsung masuk ke daftar.
+
+![Berhasil Menambah Menu](screenshots/berhasil-tambah-menu.png)
+
+### 4. Daftar Menu
+
+Halaman daftar menu setelah penyimpanan. Menu **Es Teh Melon** (kategori Es Teh Spesial,
+Rp 6.000, Tersedia) tampil bersama menu simulasi lainnya.
+
+![Daftar Menu](screenshots/daftar-menu.png)
+
 ## Halaman Utama (Must)
 
 | Halaman | File | Fungsi |
@@ -78,6 +111,12 @@ lib/
 └── widgets/
     ├── keadaan_kosong.dart         # Widget keadaan kosong (ikon + pesan)
     └── status_badge.dart           # Badge Aman/Menipis/Habis
+
+screenshots/                        # Screenshot aplikasi yang berjalan
+├── form-tambah-menu.png
+├── validasi-form.png
+├── berhasil-tambah-menu.png
+└── daftar-menu.png
 ```
 
 ## Pengujian
