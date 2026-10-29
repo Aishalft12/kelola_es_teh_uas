@@ -21,31 +21,79 @@ Aplikasi ini membantu UMKM es teh untuk:
 
 ## Screenshot Aplikasi
 
-Screenshot berikut diambil langsung dari aplikasi yang berjalan (Flutter Web di Chrome,
-viewport 420×900). Data yang dipakai adalah data simulasi aplikasi.
+Seluruh screenshot diambil langsung dari aplikasi yang berjalan (Flutter Web, viewport
+420×900), bukan mockup. Data yang tampil adalah data simulasi aplikasi.
 
-### 1. Form Tambah Menu
+### Halaman Utama (Minggu 6)
+
+#### Halaman Menu dan Resep
+
+Daftar menu beserta kategori, harga, dan status ketersediaan. Setiap kartu dapat diketuk
+untuk membuka halaman resep.
+
+![Halaman Menu dan Resep](screenshots/menu-dan-resep.png)
+
+#### Halaman Penjualan
+
+Pemilihan menu dengan pengatur jumlah, pilihan tingkat gula (Normal/Less/Extra), dan total
+yang dihitung otomatis. Contoh: 2 Es Teh Manis + 1 Es Teh Susu = Rp 17.000.
+
+![Halaman Penjualan](screenshots/penjualan.png)
+
+#### Halaman Stok Bahan
+
+Stok setiap bahan dengan batas minimum dan badge status: **Aman** (hijau) dan
+**Menipis** (oranye). Gula berstatus Menipis karena stok 80 gram di bawah minimum 200 gram.
+
+![Halaman Stok Bahan](screenshots/stok-bahan.png)
+
+#### Halaman Laporan
+
+Ringkasan total penjualan, laba kotor, jumlah gelas terjual, menu terlaris, dan rincian
+penjualan per tanggal yang bisa dibuka.
+
+![Halaman Laporan](screenshots/laporan.png)
+
+#### Navigasi Push: Halaman Turunan Resep
+
+Halaman turunan yang dibuka dengan `Navigator.push` saat kartu menu diketuk. Tombol
+**Kembali** memanggil `Navigator.pop` untuk kembali ke daftar menu.
+
+![Halaman Resep Menu](screenshots/resep-menu.png)
+
+#### Keadaan Kosong
+
+Saat data simulasi dikosongkan, setiap halaman menampilkan pesan keadaan kosong yang jelas
+alih-alih daftar kosong tanpa keterangan.
+
+![Keadaan Kosong Menu](screenshots/keadaan-kosong-menu.png)
+
+![Keadaan Kosong Stok Bahan](screenshots/keadaan-kosong-stok.png)
+
+### Form dan Validasi (Minggu 7)
+
+#### 1. Form Tambah Menu
 
 Halaman form dengan empat kolom input: Nama Menu, Kategori (dropdown),
 Harga, dan Ketersediaan (switch).
 
 ![Form Tambah Menu](screenshots/form-tambah-menu.png)
 
-### 2. Validasi Input
+#### 2. Validasi Input
 
 Ketika tombol **Simpan Menu** ditekan dalam keadaan kosong, setiap kolom
 menampilkan pesan kesalahan dan SnackBar merah "Periksa kembali data yang dimasukkan" muncul.
 
 ![Validasi Form](screenshots/validasi-form.png)
 
-### 3. Berhasil Menambah Menu
+#### 3. Berhasil Menambah Menu
 
 Setelah data valid disimpan, muncul SnackBar hijau
 "Menu "Es Teh Melon" berhasil ditambahkan" dan menu baru langsung masuk ke daftar.
 
 ![Berhasil Menambah Menu](screenshots/berhasil-tambah-menu.png)
 
-### 4. Daftar Menu
+#### 4. Daftar Menu Setelah Menambah Data
 
 Halaman daftar menu setelah penyimpanan. Menu **Es Teh Melon** (kategori Es Teh Spesial,
 Rp 6.000, Tersedia) tampil bersama menu simulasi lainnya.
@@ -113,6 +161,13 @@ lib/
     └── status_badge.dart           # Badge Aman/Menipis/Habis
 
 screenshots/                        # Screenshot aplikasi yang berjalan
+├── menu-dan-resep.png
+├── penjualan.png
+├── stok-bahan.png
+├── laporan.png
+├── resep-menu.png
+├── keadaan-kosong-menu.png
+├── keadaan-kosong-stok.png
 ├── form-tambah-menu.png
 ├── validasi-form.png
 ├── berhasil-tambah-menu.png
