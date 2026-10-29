@@ -3,13 +3,41 @@ import 'package:flutter/material.dart';
 import '../data/data_simulasi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/keadaan_kosong.dart';
+import 'menu_form_page.dart';
 import 'resep_page.dart';
 
 /// Halaman Menu dan Resep — frame Must dari wireframe Figma
 /// Menampilkan: daftar menu (nama, harga), tombol Resep per menu,
 /// tombol Tambah Menu, keadaan kosong
-class MenuResepPage extends StatelessWidget {
+///
+/// Minggu 7: StatefulWidget agar daftar menu bisa di-refresh
+/// setelah menambah menu baru dari MenuFormPage.
+class MenuResepPage extends StatefulWidget {
   const MenuResepPage({super.key});
+
+  @override
+  State<MenuResepPage> createState() => _MenuResepPageState();
+}
+
+class _MenuResepPageState extends State<MenuResepPage> {
+  // Method untuk membuka form Tambah Menu dan refresh daftar setelah ditutup
+  Future<void> _bukaFormTambahMenu() async {
+    // Navigator.push mengembalikan nilai dari Navigator.pop (true/false)
+    final bool? berhasil = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const MenuFormPage(),
+      ),
+    );
+
+    // Jika form mengembalikan true (menu baru disimpan), refresh daftar
+    if (berhasil == true && mounted) {
+      setState(() {
+        // setState memicu rebuild sehingga menu baru muncul di daftar
+        // Tidak perlu kode tambahan — daftarMenu sudah diperbarui di form
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -79,14 +107,7 @@ class MenuResepPage extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.all(16),
             child: FilledButton.icon(
-              onPressed: () {
-                // TODO: Minggu 7 — buka form Tambah Menu
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Form Tambah Menu akan dibuat pada Minggu 7'),
-                  ),
-                );
-              },
+              onPressed: _bukaFormTambahMenu,
               icon: const Icon(Icons.add),
               label: const Text('Tambah Menu'),
             ),

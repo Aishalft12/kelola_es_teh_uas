@@ -79,8 +79,9 @@ class Penjualan {
 
 // ===== List data simulasi =====
 
+/// Daftar menu — mutable untuk Minggu 7 (form Tambah Menu)
 /// Ubah list ini ke [] untuk menguji keadaan kosong
-const List<Menu> daftarMenu = [
+final List<Menu> daftarMenu = [
   Menu(
     id: 'menu1',
     nama: 'Es Teh Manis',
@@ -111,8 +112,9 @@ const List<Menu> daftarMenu = [
   ),
 ];
 
+/// Daftar bahan baku — mutable untuk persiapan Minggu 8+
 /// Ubah list ini ke [] untuk menguji keadaan kosong
-const List<Bahan> daftarBahan = [
+final List<Bahan> daftarBahan = [
   Bahan(
     id: 'bahan1',
     nama: 'Teh',
@@ -148,7 +150,8 @@ const List<Bahan> daftarBahan = [
 ];
 
 /// Resep untuk menu yang ada (contoh: Es Teh Manis)
-const List<ResepItem> daftarResep = [
+/// Mutable untuk Minggu 7 (resep menu baru bisa ditambah)
+final List<ResepItem> daftarResep = [
   ResepItem(menuId: 'menu1', bahanId: 'bahan1', namaBahan: 'Teh', jumlahPerGelas: 5),
   ResepItem(menuId: 'menu1', bahanId: 'bahan2', namaBahan: 'Gula', jumlahPerGelas: 15),
   ResepItem(menuId: 'menu1', bahanId: 'bahan4', namaBahan: 'Gelas', jumlahPerGelas: 1),
