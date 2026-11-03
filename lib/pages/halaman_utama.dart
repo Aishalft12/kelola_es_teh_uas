@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../data/data_simulasi.dart';
 import 'laporan_page.dart';
 import 'menu_resep_page.dart';
 import 'penjualan_page.dart';
@@ -17,12 +18,16 @@ class HalamanUtama extends StatefulWidget {
 class _HalamanUtamaState extends State<HalamanUtama> {
   int _indeks = 0;
 
-  static const List<Widget> _halaman = [
-    MenuResepPage(),
-    PenjualanPage(),
-    StokBahanPage(),
-    LaporanPage(),
-  ];
+  /// Halaman dibuat ulang setiap kali versi data berubah (mis. setelah
+  /// penjualan disimpan), supaya angka stok dan laporan langsung ikut
+  /// ter-update saat tab dibuka. Kunci `versi` memaksa Flutter membangun
+  /// ulang halaman, bukan memakai widget lama.
+  List<Widget> _halaman(int versi) => [
+        MenuResepPage(key: ValueKey('menu-$versi')),
+        PenjualanPage(key: ValueKey('jual-$versi')),
+        StokBahanPage(key: ValueKey('stok-$versi')),
+        LaporanPage(key: ValueKey('laporan-$versi')),
+      ];
 
   static const List<NavigationDestination> _tujuan = [
     NavigationDestination(
@@ -74,40 +79,49 @@ class _HalamanUtamaState extends State<HalamanUtama> {
   Widget build(BuildContext context) {
     final bool layarLebar = MediaQuery.sizeOf(context).width >= 600;
 
-    if (layarLebar) {
-      // Layout web: NavigationRail di kiri + konten
-      return Scaffold(
-        body: Row(
-          children: [
-            NavigationRail(
-              selectedIndex: _indeks,
-              onDestinationSelected: (i) => setState(() => _indeks = i),
-              destinations: _tujuanRail,
-              extended: MediaQuery.sizeOf(context).width >= 900,
-            ),
-            const VerticalDivider(width: 1),
-            // Batasi lebar konten agar tidak terlalu lebar
-            Expanded(
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 720),
-                  child: _halaman[_indeks],
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
+    // Dengarkan versiData: setiap penjualan tersimpan, seluruh halaman
+    // dibangun ulang sehingga stok dan laporan menampilkan angka terbaru.
+    return ValueListenableBuilder<int>(
+      valueListenable: versiData,
+      builder: (context, versi, _) {
+        final halaman = _halaman(versi);
 
-    // Layout mobile: NavigationBar di bawah
-    return Scaffold(
-      body: _halaman[_indeks],
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _indeks,
-        onDestinationSelected: (i) => setState(() => _indeks = i),
-        destinations: _tujuan,
-      ),
+        if (layarLebar) {
+          // Layout web: NavigationRail di kiri + konten
+          return Scaffold(
+            body: Row(
+              children: [
+                NavigationRail(
+                  selectedIndex: _indeks,
+                  onDestinationSelected: (i) => setState(() => _indeks = i),
+                  destinations: _tujuanRail,
+                  extended: MediaQuery.sizeOf(context).width >= 900,
+                ),
+                const VerticalDivider(width: 1),
+                // Batasi lebar konten agar tidak terlalu lebar
+                Expanded(
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 720),
+                      child: halaman[_indeks],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // Layout mobile: NavigationBar di bawah
+        return Scaffold(
+          body: halaman[_indeks],
+          bottomNavigationBar: NavigationBar(
+            selectedIndex: _indeks,
+            onDestinationSelected: (i) => setState(() => _indeks = i),
+            destinations: _tujuan,
+          ),
+        );
+      },
     );
   }
 }

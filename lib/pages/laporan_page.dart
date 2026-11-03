@@ -19,8 +19,21 @@ class _LaporanPageState extends State<LaporanPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Hitung data laporan dari daftarPenjualan
-    final penjualanPeriode = daftarPenjualan;
+    // Filter periode: hari ini / 7 hari terakhir / 30 hari terakhir
+    final sekarang = DateTime.now();
+    final DateTime batasAwal;
+    switch (_periode) {
+      case 'hari':
+        batasAwal = DateTime(sekarang.year, sekarang.month, sekarang.day);
+        break;
+      case 'bulan':
+        batasAwal = sekarang.subtract(const Duration(days: 30));
+        break;
+      default:
+        batasAwal = sekarang.subtract(const Duration(days: 7));
+    }
+    final penjualanPeriode =
+        daftarPenjualan.where((p) => !p.tanggal.isBefore(batasAwal)).toList();
 
     final totalPenjualan =
         penjualanPeriode.fold(0, (sum, p) => sum + p.total);
@@ -46,8 +59,11 @@ class _LaporanPageState extends State<LaporanPage> {
       jumlahTerlaris = sorted.first.value;
     }
 
-    // Estimasi laba kotor = 60% dari penjualan (data simulasi)
-    final labaKotor = (totalPenjualan * 0.6).round();
+    // B2 — laba kotor dihitung dari resep × harga beli bahan tiap baris
+    // penjualan, bukan persentase tetap.
+    final totalBiayaBahan =
+        penjualanPeriode.fold(0, (sum, p) => sum + p.totalBiayaBahan);
+    final labaKotor = totalPenjualan - totalBiayaBahan;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Laporan')),
@@ -152,6 +168,15 @@ class _LaporanPageState extends State<LaporanPage> {
                                   fontSize: 22,
                                   fontWeight: FontWeight.w700,
                                   color: AppColors.success,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Penjualan ${formatRupiah(totalPenjualan)} − '
+                                'biaya bahan ${formatRupiah(totalBiayaBahan)}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
                                 ),
                               ),
                             ],

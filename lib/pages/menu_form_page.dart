@@ -113,15 +113,17 @@ class _MenuFormPageState extends State<MenuFormPage> {
     if (_formKey.currentState!.validate()) {
       // Buat objek Menu baru
       final menuBaru = Menu(
-        id: 'menu${daftarMenu.length + 1}',
+        id: 'menu${DateTime.now().millisecondsSinceEpoch}',
         nama: _namaController.text.trim(),
         kategori: _kategoriDipilih!,
         harga: int.parse(_hargaController.text.trim()),
         ketersediaan: _ketersediaan,
       );
 
-      // Simpan ke List di memori
-      daftarMenu.add(menuBaru);
+      // Simpan ke List di memori.
+      // Menu baru ditaruh di urutan teratas supaya langsung terlihat
+      // setelah kembali ke halaman daftar.
+      daftarMenu.insert(0, menuBaru);
 
       // Tampilkan SnackBar sukses
       ScaffoldMessenger.of(context).showSnackBar(

@@ -30,29 +30,43 @@ class _PenjualanPageState extends State<PenjualanPage> {
     return total;
   }
 
-  bool get _adaItem => _jumlahDipilih.values.any((v) => v > 0);
+  /// Ringkasan biaya bahan untuk keranjang saat ini — ditampilkan kecil
+  /// di bawah total supaya kasir bisa melihat laba kotor sejak awal.
+  int get _biayaBahan {
+    int biaya = 0;
+    for (final menu in daftarMenu) {
+      final jumlah = _jumlahDipilih[menu.id] ?? 0;
+      if (jumlah == 0) continue;
+      biaya += biayaBahanMenu(menu.id) * jumlah;
+    }
+    return biaya;
+  }
 
   void _simpanPenjualan() {
-    if (!_adaItem) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Lengkapi data — pilih minimal 1 menu'),
-          backgroundColor: AppColors.error,
-        ),
-      );
-      return;
-    }
+    // simpanPenjualan() melakukan tiga hal sekaligus:
+    // validasi kecukupan stok (B3), pengurangan stok sesuai resep (B1),
+    // dan perhitungan biaya bahan untuk laba kotor (B2).
+    final hasil = simpanPenjualan(
+      keranjang: _jumlahDipilih,
+      gula: _gulaDipilih,
+    );
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Penjualan tersimpan — Total ${formatRupiah(_total)}'),
-        backgroundColor: AppColors.success,
+        content: Text(hasil.pesan),
+        backgroundColor:
+            hasil.berhasil ? AppColors.success : AppColors.error,
       ),
     );
-    // Reset
-    setState(() {
-      _jumlahDipilih.clear();
-      _gulaDipilih.clear();
-    });
+
+    // Kalau gagal (stok tidak cukup), keranjang dibiarkan apa adanya
+    // supaya pengguna bisa memperbaiki jumlahnya.
+    if (hasil.berhasil) {
+      setState(() {
+        _jumlahDipilih.clear();
+        _gulaDipilih.clear();
+      });
+    }
   }
 
   @override
@@ -224,6 +238,31 @@ class _PenjualanPageState extends State<PenjualanPage> {
                     ),
                   ],
                 ),
+                // Biaya bahan dihitung dari resep, bukan persentase tetap
+                if (_total > 0) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Biaya bahan · laba kotor',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      Text(
+                        '${formatRupiah(_biayaBahan)} · '
+                        '${formatRupiah(_total - _biayaBahan)}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.success,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 16),
                 FilledButton.icon(
                   onPressed: _simpanPenjualan,

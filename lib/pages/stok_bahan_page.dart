@@ -42,17 +42,18 @@ class StokBahanPage extends StatelessWidget {
                             children: [
                               const SizedBox(height: 4),
                               Text(
-                                'Stok: ${bahan.stok.toStringAsFixed(0)} ${bahan.satuan} • Min: ${bahan.stokMinimum.toStringAsFixed(0)} ${bahan.satuan}',
+                                'Stok: ${formatJumlah(bahan.stok)} ${bahan.satuan} • Min: ${formatJumlah(bahan.stokMinimum)} ${bahan.satuan}',
                                 style: const TextStyle(fontSize: 14),
                               ),
                               const SizedBox(height: 8),
                               StatusBadge(status: status),
                             ],
                           ),
+                          // Biaya per satuan — dasar perhitungan laba kotor
                           trailing: Text(
-                            formatRupiah(bahan.hargaBeli),
+                            '${formatRupiah(bahan.biayaPerSatuan.round())}/${bahan.satuan}',
                             style: const TextStyle(
-                              fontSize: 12,
+                              fontSize: 11,
                               color: AppColors.textSecondary,
                             ),
                           ),
