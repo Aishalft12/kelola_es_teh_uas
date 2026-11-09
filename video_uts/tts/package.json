@@ -1,0 +1,1 @@
+{ "name": "tts-es-teh", "private": true, "dependencies": { "msedge-tts": "*" } }
