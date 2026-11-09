@@ -9,6 +9,8 @@ Mata Kuliah: Mobile and Web Application Development
 - **NIM:** 23.01.55.0012
 - **Kelas:** A1
 - **Semester:** 7 (Ganjil 2026/2027)
+- **Wireframe Figma:** [Wireframe Aplikasi Es Teh](https://www.figma.com/design/OIUH6K8uZkULTgP4ne7uVc/Wireframe-Aplikasi-Es-Teh-%E2%80%94-sesuai-referensi?node-id=0-1&t=BqVC1PR9g8v6TiHa-1)
+- **Video presentasi UTS:** https://youtu.be/pa9LfBGsTgs
 
 ## Deskripsi
 
@@ -18,6 +20,7 @@ Aplikasi ini membantu UMKM es teh untuk:
 - Melihat laporan penjualan, laba kotor, dan menu terlaris
 - Mengelola menu dan resep (bahan per gelas)
 - Menambah menu baru melalui form dengan validasi input
+- Masuk, daftar, dan keluar dengan Firebase Authentication (Minggu 9)
 
 ## Screenshot Aplikasi
 
@@ -138,17 +141,76 @@ Halaman **Tambah Menu** (`menu_form_page.dart`) mengimplementasikan:
 - **Web (>= 600px):** `NavigationRail` di sisi kiri (sidebar)
 - **Halaman turunan:** `Navigator.push` + `Navigator.pop`
 
+## Firebase dan Login (Minggu 9)
+
+Aplikasi terhubung ke project Firebase **es-teh-23010550012** (paket Spark, tanpa billing)
+dengan penyedia **Email/Password**. Target platform: Chrome.
+
+### Alur
+
+```
+main() → Firebase.initializeApp() → runApp
+            ↓
+     CekStatusLogin (authStateChanges + StreamBuilder)
+       ├── menunggu      → indikator proses
+       ├── belum masuk   → MasukPage (mode Masuk / Daftar)
+       └── sudah masuk   → HalamanUtama (terlindungi, ada tombol Keluar)
+```
+
+- Satu halaman, dua mode: **Masuk** (email + password) dan **Daftar** (+ ulangi password).
+- Validasi form: email wajib & format benar, password minimal 6 karakter, ulangi password harus sama.
+- Tombol dinonaktifkan selama menunggu jawaban Firebase (`async/await` + `try/catch`).
+- Setelah berhasil tidak ada `Navigator`: `CekStatusLogin` mengganti halaman otomatis.
+- Sesi login disimpan Firebase sehingga **tetap masuk setelah refresh**, sampai menekan **Keluar**.
+- Data penjualan/stok masih di memori (hilang saat refresh) — dipindah ke Firestore pada Minggu 10.
+
+### Pesan Kesalahan
+
+| Kode Firebase | Keadaan | Pesan |
+|---|---|---|
+| `invalid-credential` | Email tak terdaftar / password salah | Email atau password salah |
+| `email-already-in-use` | Daftar dengan email terpakai | Email sudah terdaftar. Silakan masuk. |
+| `weak-password` | Password terlalu pendek | Password terlalu lemah, minimal 6 karakter |
+| `network-request-failed` | Koneksi gagal | Tidak dapat terhubung. Periksa koneksi internet. |
+| `operation-not-allowed` | Penyedia belum aktif | Login email/password belum diaktifkan |
+
+Email tak terdaftar dan password salah sengaja diberi pesan yang sama agar orang lain tidak dapat menebak email mana yang terdaftar.
+
+### Tabel Uji Login
+
+Diuji di Chrome dengan project Firebase asli memakai akun simulasi (bukan password asli).
+
+| # | Kasus uji | Hasil yang diharapkan | Hasil nyata |
+|---|---|---|---|
+| 1 | Kolom kosong, tekan Masuk | Kedua kolom menampilkan pesan | Sesuai |
+| 2 | Email tidak valid (`aisha@`) | Format email belum benar | Sesuai |
+| 3 | Daftar akun baru `pemilik@esteh.id` | Langsung masuk ke Halaman Utama | Sesuai |
+| 4 | Refresh (F5) setelah masuk | Tetap di Halaman Utama | Sesuai |
+| 5 | Tekan Keluar | Kembali ke halaman Masuk | Sesuai |
+| 6 | Password salah | Email atau password salah | Sesuai |
+| 7 | Daftar dengan email terpakai | Email sudah terdaftar. Silakan masuk. | Sesuai |
+| 8 | Login benar | Halaman Utama tampil | Sesuai |
+
+### Bukti: Authentication > Users
+
+![Firebase Console Authentication Users](screenshots/console-users.png)
+
 ## Struktur Folder
 
 ```
 lib/
-├── main.dart                      # Entry point + MaterialApp + tema
+├── main.dart                      # Entry point: Firebase.initializeApp + MaterialApp
+├── firebase_options.dart          # Konfigurasi project Firebase (web)
+├── auth/
+│   └── aturan_login.dart          # Validasi login + terjemahan kode error (Minggu 9)
 ├── data/
 │   └── data_simulasi.dart         # Data menu, bahan, resep, penjualan (mutable)
 ├── theme/
 │   ├── app_colors.dart            # Warna dari style guide Figma
 │   └── app_theme.dart             # ThemeData (Material 3)
 ├── pages/
+│   ├── cek_status_login.dart      # authStateChanges → Masuk / Halaman Utama (Minggu 9)
+│   ├── masuk_page.dart            # Halaman Masuk & Daftar (Minggu 9)
 │   ├── halaman_utama.dart         # Shell: NavigationBar / NavigationRail
 │   ├── menu_resep_page.dart       # Halaman 1: Menu dan Resep (StatefulWidget)
 │   ├── menu_form_page.dart        # Form Tambah Menu (Minggu 7)
@@ -158,6 +220,7 @@ lib/
 │   └── resep_page.dart            # Halaman turunan: Resep per menu
 └── widgets/
     ├── keadaan_kosong.dart         # Widget keadaan kosong (ikon + pesan)
+    ├── tombol_keluar.dart          # Tombol Keluar di AppBar (Minggu 9)
     └── status_badge.dart           # Badge Aman/Menipis/Habis
 
 screenshots/                        # Screenshot aplikasi yang berjalan
@@ -171,7 +234,8 @@ screenshots/                        # Screenshot aplikasi yang berjalan
 ├── form-tambah-menu.png
 ├── validasi-form.png
 ├── berhasil-tambah-menu.png
-└── daftar-menu.png
+├── daftar-menu.png
+└── console-users.png             # Bukti akun di Firebase Authentication
 ```
 
 ## Pengujian
@@ -192,6 +256,23 @@ File: `test/widget_test.dart` — 11 kasus pengujian:
 9. NavigationBar memiliki 4 tujuan utama
 10. Tombol Tambah Menu tampil di halaman Menu
 11. Klik menu membuka halaman Resep dengan tombol Kembali
+
+Widget test memakai `EsTehApp(halamanAwal: HalamanUtama())` agar tidak memanggil Firebase.
+
+File: `test/logika_penjualan_test.dart` — 7 kasus logika stok, resep, dan laba kotor.
+
+### Tes Login (Minggu 9)
+File: `test/login_test.dart` — 8 kasus:
+1. Email kosong dan format salah ditolak
+2. Password minimal 6 karakter
+3. Ulangi password harus sama
+4. Email tak terdaftar dan password salah diberi pesan yang sama
+5. Kode error lain diterjemahkan ke pesan yang dipahami pengguna
+6. Halaman Masuk: kolom kosong — kedua kolom menampilkan pesan
+7. Halaman Masuk: email tidak valid dan password pendek ditolak
+8. Mode Daftar: ulangi password harus sama
+
+Total: **26 tes lulus** (`flutter test`).
 
 ## Style Guide
 
@@ -226,7 +307,8 @@ flutter test
 - Flutter 3.47.7 (Channel stable)
 - Dart 3.13.5
 - Material 3
-- Tanpa paket tambahan dari pub.dev
+- firebase_core 5.1.0, firebase_auth 7.0.1
+- Firebase (paket Spark): Authentication Email/Password
 
 ## Catatan
 
@@ -237,4 +319,9 @@ flutter test
   - Validator per kolom + `AutovalidateMode.onUserInteraction`
   - State data di memori (`List<Menu>` mutable)
   - Refresh daftar via `await Navigator.push` + `setState()`
-- Firebase akan dihubungkan pada pertemuan berikutnya
+- Minggu 9: Firebase dan Login
+  - Project Firebase Spark + penyedia Email/Password
+  - Halaman Masuk/Daftar, cek status login, tombol Keluar
+  - Pesan kesalahan dari `FirebaseAuthException.code`
+  - Sesi bertahan setelah refresh
+- Minggu 10: data dipindah ke Cloud Firestore
