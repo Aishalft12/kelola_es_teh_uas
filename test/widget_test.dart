@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:es_teh_app/main.dart';
+import 'package:es_teh_app/pages/halaman_utama.dart';
 import 'package:es_teh_app/data/data_simulasi.dart';
 
 void main() {
   // Helper: pump aplikasi dan navigasi ke halaman Menu
   Future<void> pumpAplikasi(WidgetTester tester) async {
-    await tester.pumpWidget(const EsTehApp());
+    await tester.pumpWidget(const EsTehApp(halamanAwal: HalamanUtama()));
     await tester.pumpAndSettle();
   }
 
@@ -234,7 +235,7 @@ void main() {
 
   testWidgets('Aplikasi menampilkan halaman Menu dan Resep',
       (WidgetTester tester) async {
-    await tester.pumpWidget(const EsTehApp());
+    await tester.pumpWidget(const EsTehApp(halamanAwal: HalamanUtama()));
 
     expect(find.text('Menu dan Resep'), findsOneWidget);
     expect(find.text('Es Teh Manis'), findsOneWidget);
@@ -244,7 +245,7 @@ void main() {
 
   testWidgets('NavigationBar memiliki 4 tujuan utama',
       (WidgetTester tester) async {
-    await tester.pumpWidget(const EsTehApp());
+    await tester.pumpWidget(const EsTehApp(halamanAwal: HalamanUtama()));
 
     expect(find.text('Menu'), findsWidgets);
     expect(find.text('Penjualan'), findsWidgets);
@@ -254,14 +255,14 @@ void main() {
 
   testWidgets('Tombol Tambah Menu tampil di halaman Menu',
       (WidgetTester tester) async {
-    await tester.pumpWidget(const EsTehApp());
+    await tester.pumpWidget(const EsTehApp(halamanAwal: HalamanUtama()));
 
     expect(find.text('Tambah Menu'), findsOneWidget);
   });
 
   testWidgets('Klik menu membuka halaman Resep dengan tombol Kembali',
       (WidgetTester tester) async {
-    await tester.pumpWidget(const EsTehApp());
+    await tester.pumpWidget(const EsTehApp(halamanAwal: HalamanUtama()));
 
     await tester.tap(find.text('Es Teh Manis'));
     await tester.pumpAndSettle();

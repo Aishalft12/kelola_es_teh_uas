@@ -4,6 +4,7 @@ import '../data/data_simulasi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/keadaan_kosong.dart';
 import '../widgets/status_badge.dart';
+import '../widgets/tombol_keluar.dart';
 
 /// Halaman Stok Bahan — frame Must dari wireframe Figma
 /// Menampilkan: daftar bahan (stok, batas minimum, status Aman/Menipis),
@@ -14,7 +15,10 @@ class StokBahanPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Stok Bahan')),
+      appBar: AppBar(
+        title: const Text('Stok Bahan'),
+        actions: const [TombolKeluar()],
+      ),
       body: Column(
         children: [
           // Area konten yang bisa digulir

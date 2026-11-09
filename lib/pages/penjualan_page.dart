@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/data_simulasi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/keadaan_kosong.dart';
+import '../widgets/tombol_keluar.dart';
 
 /// Halaman Penjualan — frame Must dari wireframe Figma
 /// Menampilkan: daftar menu dengan pengatur jumlah, pilihan tingkat gula,
@@ -72,7 +73,10 @@ class _PenjualanPageState extends State<PenjualanPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Penjualan')),
+      appBar: AppBar(
+        title: const Text('Penjualan'),
+        actions: const [TombolKeluar()],
+      ),
       body: Column(
         children: [
           Expanded(

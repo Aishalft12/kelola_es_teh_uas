@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/data_simulasi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/keadaan_kosong.dart';
+import '../widgets/tombol_keluar.dart';
 
 /// Halaman Laporan — frame Must dari wireframe Figma
 /// Menampilkan: pilihan periode, total penjualan, laba kotor,
@@ -66,7 +67,10 @@ class _LaporanPageState extends State<LaporanPage> {
     final labaKotor = totalPenjualan - totalBiayaBahan;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Laporan')),
+      appBar: AppBar(
+        title: const Text('Laporan'),
+        actions: const [TombolKeluar()],
+      ),
       body: Column(
         children: [
           // Pilihan periode

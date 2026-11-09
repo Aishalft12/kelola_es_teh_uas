@@ -5,6 +5,7 @@ import '../theme/app_colors.dart';
 import '../widgets/keadaan_kosong.dart';
 import 'menu_form_page.dart';
 import 'resep_page.dart';
+import '../widgets/tombol_keluar.dart';
 
 /// Halaman Menu dan Resep — frame Must dari wireframe Figma
 /// Menampilkan: daftar menu (nama, harga), tombol Resep per menu,
@@ -42,7 +43,10 @@ class _MenuResepPageState extends State<MenuResepPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Menu dan Resep')),
+      appBar: AppBar(
+        title: const Text('Menu dan Resep'),
+        actions: const [TombolKeluar()],
+      ),
       body: Column(
         children: [
           // Area konten yang bisa digulir
