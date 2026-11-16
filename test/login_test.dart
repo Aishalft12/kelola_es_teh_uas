@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:es_teh_app/auth/aturan_login.dart';
 import 'package:es_teh_app/main.dart';
 import 'package:es_teh_app/pages/masuk_page.dart';
+import 'package:es_teh_app/services/layanan_memori.dart';
 
 /// Tes Minggu 9 — aturan login dan halaman Masuk/Daftar.
 /// Tidak memanggil Firebase: hanya validasi form dan terjemahan kode error.
@@ -20,6 +21,12 @@ void main() {
       expect(validasiPassword(''), 'Password tidak boleh kosong');
       expect(validasiPassword('12345'), 'Password minimal 6 karakter');
       expect(validasiPassword('rahasia1'), isNull);
+    });
+
+    test('Nama lengkap wajib saat Daftar', () {
+      expect(validasiNamaLengkap(''), 'Nama lengkap tidak boleh kosong');
+      expect(validasiNamaLengkap('Al'), 'Nama lengkap minimal 3 karakter');
+      expect(validasiNamaLengkap('Aisha Lufita'), isNull);
     });
 
     test('Ulangi password harus sama', () {
@@ -47,12 +54,15 @@ void main() {
 
   group('Halaman Masuk', () {
     Future<void> buka(WidgetTester tester) async {
-      await tester.pumpWidget(const EsTehApp(halamanAwal: MasukPage()));
+      await tester.pumpWidget(EsTehApp(layanan: LayananMemori(), halamanAwal: const MasukPage()));
       await tester.pumpAndSettle();
     }
 
     testWidgets('Kolom kosong — kedua kolom menampilkan pesan', (tester) async {
       await buka(tester);
+      // Form mode Daftar lebih panjang: gulir dulu agar tombol terlihat
+      await tester.ensureVisible(find.byKey(const Key('tombol-kirim')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('tombol-kirim')));
       await tester.pumpAndSettle();
 
@@ -64,6 +74,9 @@ void main() {
       await buka(tester);
       await tester.enterText(find.byKey(const Key('kolom-email')), 'aisha@');
       await tester.enterText(find.byKey(const Key('kolom-password')), '123');
+      // Form mode Daftar lebih panjang: gulir dulu agar tombol terlihat
+      await tester.ensureVisible(find.byKey(const Key('tombol-kirim')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('tombol-kirim')));
       await tester.pumpAndSettle();
 
@@ -77,10 +90,16 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('kolom-ulangi')), findsOneWidget);
+      expect(find.byKey(const Key('kolom-nama')), findsOneWidget);
+
+      await tester.enterText(find.byKey(const Key('kolom-nama')), 'Aisha Lufita');
 
       await tester.enterText(find.byKey(const Key('kolom-email')), 'pemilik@esteh.id');
       await tester.enterText(find.byKey(const Key('kolom-password')), 'rahasia1');
       await tester.enterText(find.byKey(const Key('kolom-ulangi')), 'rahasia2');
+      // Form mode Daftar lebih panjang: gulir dulu agar tombol terlihat
+      await tester.ensureVisible(find.byKey(const Key('tombol-kirim')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('tombol-kirim')));
       await tester.pumpAndSettle();
 

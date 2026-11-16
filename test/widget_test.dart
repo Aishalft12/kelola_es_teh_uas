@@ -3,12 +3,18 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:es_teh_app/main.dart';
 import 'package:es_teh_app/pages/halaman_utama.dart';
-import 'package:es_teh_app/data/data_simulasi.dart';
+import 'package:es_teh_app/services/layanan_memori.dart';
 
 void main() {
+  // Setiap tes memakai LayananMemori baru: data Firestore digantikan memori,
+  // jadi tes cepat, tidak butuh internet, dan tidak saling memengaruhi.
+  late LayananMemori layanan;
+
+  setUp(() => layanan = LayananMemori());
+
   // Helper: pump aplikasi dan navigasi ke halaman Menu
   Future<void> pumpAplikasi(WidgetTester tester) async {
-    await tester.pumpWidget(const EsTehApp(halamanAwal: HalamanUtama()));
+    await tester.pumpWidget(EsTehApp(layanan: layanan, halamanAwal: const HalamanUtama()));
     await tester.pumpAndSettle();
   }
 
@@ -159,7 +165,7 @@ void main() {
     'Kasus 6: Semua data valid — menu berhasil disimpan dan tampil di daftar',
     (WidgetTester tester) async {
       // Catat jumlah menu sebelum tes
-      final jumlahSebelum = daftarMenu.length;
+      final jumlahSebelum = layanan.menuSaatIni.length;
 
       await bukaFormTambahMenu(tester);
 
@@ -192,11 +198,8 @@ void main() {
       // Menu baru harus tampil di daftar
       expect(find.text('Es Teh Melon'), findsOneWidget);
 
-      // Jumlah menu harus bertambah
-      expect(daftarMenu.length, jumlahSebelum + 1);
-
-      // Cleanup: hapus menu yang ditambahkan oleh tes
-      daftarMenu.removeWhere((m) => m.nama == 'Es Teh Melon');
+      // Jumlah menu di layanan data harus bertambah
+      expect(layanan.menuSaatIni.length, jumlahSebelum + 1);
     },
   );
 
@@ -235,7 +238,7 @@ void main() {
 
   testWidgets('Aplikasi menampilkan halaman Menu dan Resep',
       (WidgetTester tester) async {
-    await tester.pumpWidget(const EsTehApp(halamanAwal: HalamanUtama()));
+    await pumpAplikasi(tester);
 
     expect(find.text('Menu dan Resep'), findsOneWidget);
     expect(find.text('Es Teh Manis'), findsOneWidget);
@@ -245,7 +248,7 @@ void main() {
 
   testWidgets('NavigationBar memiliki 4 tujuan utama',
       (WidgetTester tester) async {
-    await tester.pumpWidget(const EsTehApp(halamanAwal: HalamanUtama()));
+    await pumpAplikasi(tester);
 
     expect(find.text('Menu'), findsWidgets);
     expect(find.text('Penjualan'), findsWidgets);
@@ -255,14 +258,14 @@ void main() {
 
   testWidgets('Tombol Tambah Menu tampil di halaman Menu',
       (WidgetTester tester) async {
-    await tester.pumpWidget(const EsTehApp(halamanAwal: HalamanUtama()));
+    await pumpAplikasi(tester);
 
     expect(find.text('Tambah Menu'), findsOneWidget);
   });
 
   testWidgets('Klik menu membuka halaman Resep dengan tombol Kembali',
       (WidgetTester tester) async {
-    await tester.pumpWidget(const EsTehApp(halamanAwal: HalamanUtama()));
+    await pumpAplikasi(tester);
 
     await tester.tap(find.text('Es Teh Manis'));
     await tester.pumpAndSettle();

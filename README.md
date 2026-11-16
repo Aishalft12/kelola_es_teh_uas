@@ -19,6 +19,7 @@ Aplikasi ini membantu UMKM es teh untuk:
 - Melihat stok bahan baku dengan status Aman/Menipis/Habis
 - Melihat laporan penjualan, laba kotor, dan menu terlaris
 - Mengelola menu dan resep (bahan per gelas)
+- Menyimpan seluruh data di Cloud Firestore secara real-time (Minggu 10)
 - Menambah menu baru melalui form dengan validasi input
 - Masuk, daftar, dan keluar dengan Firebase Authentication (Minggu 9)
 
@@ -195,6 +196,80 @@ Diuji di Chrome dengan project Firebase asli memakai akun simulasi (bukan passwo
 
 ![Firebase Console Authentication Users](screenshots/console-users.png)
 
+## Cloud Firestore (Minggu 10)
+
+Data aplikasi kini tersimpan permanen di **Cloud Firestore** (project `es-teh-23010550012`,
+paket Spark, lokasi Jakarta) dan tampil real-time lewat `StreamBuilder`. Data tidak lagi
+hilang saat browser di-refresh.
+
+### Pemetaan ERD ke Collection
+
+| Collection (Doc ID) | Field dan tipe data | Kegunaan |
+|---|---|---|
+| `users` (uid Auth) | `id_pengguna` String, `nama_lengkap` String, `email` String, `peran` String, `dibuat_pada` Timestamp | Profil pemilik usaha; dibuat saat daftar/masuk, dipakai untuk sapaan |
+| `menu` (`menu1`… / auto-ID) | `id_menu` String, `nama` String, `kategori` String, `harga` int, `tersedia` bool, `resep` Array<Map>{`id_bahan`, `nama_bahan`, `jumlah_per_gelas`}, `dibuat_pada` Timestamp | Master menu + resep; diisi otomatis (auto-seed) bila kosong |
+| `bahan` (`bahan1`…) | `id_bahan` String, `nama` String, `satuan` String, `stok` number, `stok_minimum` number, `harga_beli` int, `isi_kemasan` number | Master stok bahan baku; diisi otomatis bila kosong |
+| `penjualan` (auto-ID) | `id_penjualan` String, `id_pengguna` String, `tanggal` Timestamp, `total` int, `biaya_bahan` int, `laba_kotor` int, `items` Array<Map>{`id_menu`, `nama_menu`, `jumlah`, `tingkat_gula`, `subtotal`, `biaya_bahan`} | Transaksi milik satu pengguna |
+
+Relasi: `users` 1–N `penjualan` (lewat `id_pengguna`), `menu` N–N `bahan` (lewat `resep.id_bahan`).
+
+**Denormalisasi terkontrol** (Firestore tidak punya JOIN):
+- `resep` disimpan di dalam dokumen `menu` beserta `nama_bahan` → halaman Resep cukup satu kali baca.
+- `nama_menu` disalin ke setiap baris `penjualan.items` → Laporan tidak perlu membaca collection `menu`.
+- `biaya_bahan` dan `laba_kotor` disimpan saat transaksi → laba kotor tetap benar walau harga bahan berubah kemudian.
+
+### Security Rules
+
+Diterbitkan di Firebase Console (salinan di `firestore.rules`):
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
+```
+
+### Alur Data
+
+- `lib/services/layanan_es_teh.dart` — kontrak `LayananEsTeh` + `LayananScope` (InheritedWidget).
+- `lib/services/layanan_firestore.dart` — implementasi Cloud Firestore asli.
+- `lib/services/layanan_memori.dart` — implementasi di memori untuk widget test (tanpa internet).
+- **Tambah data + aturan bisnis:** `simpanPenjualan` berjalan dalam `runTransaction`: stok dibaca ulang
+  dari server, divalidasi (stok tidak cukup → ditolak, tidak ada dokumen berubah), lalu pengurangan
+  stok dan dokumen `penjualan` ditulis bersamaan. Form Tambah Menu menolak nama duplikat.
+- **Tampil data:** Menu, Penjualan, Stok, dan Laporan memakai `StreamBuilder` dengan tiga keadaan
+  (memuat, gagal, data/kosong). Laporan hanya membaca `penjualan` milik pengguna yang login
+  (`where('id_pengguna', isEqualTo: uid)`), diurutkan di sisi Dart agar tidak butuh composite index.
+- **Auto-seed:** saat Halaman Utama dibuka pertama kali, `menu` dan `bahan` diisi data awal
+  dengan `WriteBatch` bila masih kosong.
+
+### Tabel Uji Cloud Firestore
+
+| # | Kasus uji | Langkah | Hasil yang diharapkan | Hasil nyata |
+|---|---|---|---|---|
+| 1 | Daftar akun baru | Daftar dengan nama lengkap | Dokumen muncul di `users`, Menu menyapa "Halo, <nama>" | Sesuai |
+| 2 | Tambah menu valid | Tambah "Es Teh Melon", Rp 6.000 | Dokumen baru di `menu`, tampil paling atas | Sesuai |
+| 3 | Tambah penjualan valid | 2 × Es Teh Manis, Simpan | Dokumen baru di `penjualan`; gula di `bahan` turun 30 g; tampil di Laporan | Sesuai |
+| 4 | Tolak stok tidak cukup | Pesan gelas melebihi stok gula | SnackBar "Stok bahan tidak cukup — Gula kurang …"; dokumen tidak bertambah | Sesuai |
+| 5 | Bertahan saat refresh | Tekan F5 | Sapaan, menu baru, stok, dan laporan tetap tampil | Sesuai |
+| 6 | Isolasi antar akun | Keluar, masuk dengan akun kedua | Laporan akun kedua kosong; penjualan akun pertama tidak tampil | Sesuai |
+| 7 | Security Rules | Rules Playground: `get /menu/menu1` tanpa autentikasi | Ditolak (Denied) | Sesuai — *Simulated read denied* |
+
+### Bukti: Rules Playground (tanpa login ditolak)
+
+![Rules Playground denied](screenshots/firestore-rules-denied.png)
+
+### Bukti: Isi Collection di Firebase Console
+
+![Collection users](screenshots/firestore-users.png)
+![Collection menu](screenshots/firestore-menu.png)
+![Collection bahan](screenshots/firestore-bahan.png)
+![Collection penjualan](screenshots/firestore-penjualan.png)
+
 ## Struktur Folder
 
 ```
@@ -204,7 +279,11 @@ lib/
 ├── auth/
 │   └── aturan_login.dart          # Validasi login + terjemahan kode error (Minggu 9)
 ├── data/
-│   └── data_simulasi.dart         # Data menu, bahan, resep, penjualan (mutable)
+│   └── data_simulasi.dart         # Model + toMap/fromMap, data awal, logika B1–B3 (murni)
+├── services/
+│   ├── layanan_es_teh.dart        # Kontrak layanan data + LayananScope (Minggu 10)
+│   ├── layanan_firestore.dart     # Implementasi Cloud Firestore (Minggu 10)
+│   └── layanan_memori.dart        # Implementasi memori untuk test (Minggu 10)
 ├── theme/
 │   ├── app_colors.dart            # Warna dari style guide Figma
 │   └── app_theme.dart             # ThemeData (Material 3)
@@ -221,6 +300,7 @@ lib/
 └── widgets/
     ├── keadaan_kosong.dart         # Widget keadaan kosong (ikon + pesan)
     ├── tombol_keluar.dart          # Tombol Keluar di AppBar (Minggu 9)
+    └── keadaan_stream.dart         # Tampilan memuat / gagal untuk StreamBuilder (Minggu 10)
     └── status_badge.dart           # Badge Aman/Menipis/Habis
 
 screenshots/                        # Screenshot aplikasi yang berjalan
@@ -235,7 +315,10 @@ screenshots/                        # Screenshot aplikasi yang berjalan
 ├── validasi-form.png
 ├── berhasil-tambah-menu.png
 ├── daftar-menu.png
-└── console-users.png             # Bukti akun di Firebase Authentication
+├── console-users.png             # Bukti akun di Firebase Authentication
+└── firestore-*.png               # Bukti isi collection Firestore (Minggu 10)
+
+firestore.rules                     # Security Rules yang diterbitkan
 ```
 
 ## Pengujian
@@ -257,12 +340,15 @@ File: `test/widget_test.dart` — 11 kasus pengujian:
 10. Tombol Tambah Menu tampil di halaman Menu
 11. Klik menu membuka halaman Resep dengan tombol Kembali
 
-Widget test memakai `EsTehApp(halamanAwal: HalamanUtama())` agar tidak memanggil Firebase.
+Widget test memakai `EsTehApp(layanan: LayananMemori(), halamanAwal: HalamanUtama())`
+agar tidak memanggil Firebase.
 
-File: `test/logika_penjualan_test.dart` — 7 kasus logika stok, resep, dan laba kotor.
+File: `test/logika_penjualan_test.dart` — 9 kasus: biaya bahan dari resep, toMap/fromMap,
+pengurangan stok, total & laba kotor, stok tidak cukup ditolak, keranjang kosong,
+isolasi penjualan antar akun, status stok, dan profil pengguna.
 
 ### Tes Login (Minggu 9)
-File: `test/login_test.dart` — 8 kasus:
+File: `test/login_test.dart` — 9 kasus (termasuk nama lengkap wajib saat Daftar):
 1. Email kosong dan format salah ditolak
 2. Password minimal 6 karakter
 3. Ulangi password harus sama
@@ -272,7 +358,7 @@ File: `test/login_test.dart` — 8 kasus:
 7. Halaman Masuk: email tidak valid dan password pendek ditolak
 8. Mode Daftar: ulangi password harus sama
 
-Total: **26 tes lulus** (`flutter test`).
+Total: **29 tes** (`flutter test`).
 
 ## Style Guide
 
@@ -307,8 +393,8 @@ flutter test
 - Flutter 3.47.7 (Channel stable)
 - Dart 3.13.5
 - Material 3
-- firebase_core 5.1.0, firebase_auth 7.0.1
-- Firebase (paket Spark): Authentication Email/Password
+- firebase_core 5.1.0, firebase_auth 7.0.1, cloud_firestore 7.1.0
+- Firebase (paket Spark): Authentication Email/Password, Cloud Firestore
 
 ## Catatan
 
@@ -324,4 +410,8 @@ flutter test
   - Halaman Masuk/Daftar, cek status login, tombol Keluar
   - Pesan kesalahan dari `FirebaseAuthException.code`
   - Sesi bertahan setelah refresh
-- Minggu 10: data dipindah ke Cloud Firestore
+- Minggu 10: Cloud Firestore
+  - Collection users, menu (+resep), bahan, penjualan dengan Security Rules `request.auth != null`
+  - Tambah menu & penjualan ke Firestore; penjualan ditolak bila stok tidak cukup (transaction)
+  - StreamBuilder real-time, penjualan terpisah per pengguna, data bertahan setelah refresh
+- Minggu 11 (rencana): edit & hapus menu, catat pembelian bahan, batalkan penjualan
