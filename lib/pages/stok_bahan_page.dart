@@ -1,16 +1,32 @@
 import 'package:flutter/material.dart';
 
 import '../data/data_simulasi.dart';
+import '../services/layanan_es_teh.dart';
 import '../theme/app_colors.dart';
 import '../widgets/keadaan_kosong.dart';
+import '../widgets/keadaan_stream.dart';
 import '../widgets/status_badge.dart';
 import '../widgets/tombol_keluar.dart';
 
 /// Halaman Stok Bahan — frame Must dari wireframe Figma
 /// Menampilkan: daftar bahan (stok, batas minimum, status Aman/Menipis),
 /// tombol Catat Pembelian, keadaan kosong
-class StokBahanPage extends StatelessWidget {
+/// Minggu 10: stok dibaca real-time dari collection `bahan`.
+class StokBahanPage extends StatefulWidget {
   const StokBahanPage({super.key});
+
+  @override
+  State<StokBahanPage> createState() => _StokBahanPageState();
+}
+
+class _StokBahanPageState extends State<StokBahanPage> {
+  Stream<List<Bahan>>? _streamBahan;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _streamBahan ??= LayananScope.of(context).streamBahan();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +39,15 @@ class StokBahanPage extends StatelessWidget {
         children: [
           // Area konten yang bisa digulir
           Expanded(
-            child: daftarBahan.isEmpty
+            child: StreamBuilder<List<Bahan>>(
+              stream: _streamBahan,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                  return const MemuatData();
+                }
+                if (snapshot.hasError) return const GagalMemuat();
+                final daftarBahan = snapshot.data ?? const <Bahan>[];
+                return daftarBahan.isEmpty
                 ? const KeadaanKosong(
                     ikon: Icons.inventory_2_outlined,
                     pesan: 'Belum ada bahan.\nTambahkan bahan baku pertama.',
@@ -64,17 +88,20 @@ class StokBahanPage extends StatelessWidget {
                         ),
                       );
                     },
-                  ),
+                  );
+              },
+            ),
           ),
           // Aksi utama di bawah
           Padding(
             padding: const EdgeInsets.all(16),
             child: FilledButton.icon(
               onPressed: () {
-                // TODO: Minggu 7 — buka form Catat Pembelian
+                // Form Catat Pembelian (menambah stok) dibuat setelah CRUD
+                // lengkap, sesuai rencana pada proposal.
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Form Catat Pembelian akan dibuat pada Minggu 7'),
+                    content: Text('Form Catat Pembelian sedang dikembangkan'),
                   ),
                 );
               },

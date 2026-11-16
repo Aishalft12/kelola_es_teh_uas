@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 
 import '../data/data_simulasi.dart';
+import '../services/layanan_es_teh.dart';
 import '../theme/app_colors.dart';
 import '../widgets/keadaan_kosong.dart';
+import '../widgets/keadaan_stream.dart';
 import '../widgets/tombol_keluar.dart';
 
 /// Halaman Laporan — frame Must dari wireframe Figma
 /// Menampilkan: pilihan periode, total penjualan, laba kotor,
 /// menu terlaris, keadaan kosong
+/// Minggu 10: dibaca real-time dari collection `penjualan`, hanya milik
+/// pengguna yang sedang login.
 class LaporanPage extends StatefulWidget {
   const LaporanPage({super.key});
 
@@ -17,9 +21,35 @@ class LaporanPage extends StatefulWidget {
 
 class _LaporanPageState extends State<LaporanPage> {
   String _periode = 'minggu';
+  Stream<List<Penjualan>>? _streamPenjualan;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _streamPenjualan ??= LayananScope.of(context).streamPenjualanSaya();
+  }
 
   @override
   Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Laporan'),
+        actions: const [TombolKeluar()],
+      ),
+      body: StreamBuilder<List<Penjualan>>(
+        stream: _streamPenjualan,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+            return const MemuatData();
+          }
+          if (snapshot.hasError) return const GagalMemuat();
+          return _isi(snapshot.data ?? const <Penjualan>[]);
+        },
+      ),
+    );
+  }
+
+  Widget _isi(List<Penjualan> daftarPenjualan) {
     // Filter periode: hari ini / 7 hari terakhir / 30 hari terakhir
     final sekarang = DateTime.now();
     final DateTime batasAwal;
@@ -66,12 +96,7 @@ class _LaporanPageState extends State<LaporanPage> {
         penjualanPeriode.fold(0, (sum, p) => sum + p.totalBiayaBahan);
     final labaKotor = totalPenjualan - totalBiayaBahan;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Laporan'),
-        actions: const [TombolKeluar()],
-      ),
-      body: Column(
+    return Column(
         children: [
           // Pilihan periode
           Padding(
@@ -259,7 +284,8 @@ class _LaporanPageState extends State<LaporanPage> {
                           child: ExpansionTile(
                             leading: const Icon(Icons.receipt),
                             title: Text(
-                              '${p.tanggal.day}/${p.tanggal.month}/${p.tanggal.year}',
+                              '${p.tanggal.day}/${p.tanggal.month}/${p.tanggal.year} • '
+                              '${p.tanggal.hour.toString().padLeft(2, '0')}.${p.tanggal.minute.toString().padLeft(2, '0')}',
                               style: const TextStyle(fontSize: 16),
                             ),
                             subtitle: Text(
@@ -296,7 +322,6 @@ class _LaporanPageState extends State<LaporanPage> {
                   ),
           ),
         ],
-      ),
-    );
+      );
   }
 }

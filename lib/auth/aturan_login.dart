@@ -55,3 +55,11 @@ String pesanKesalahanAuth(String kode) {
       return 'Terjadi kesalahan ($kode). Silakan coba lagi.';
   }
 }
+
+/// Nama lengkap (mode Daftar) wajib diisi, minimal 3 huruf.
+String? validasiNamaLengkap(String? nilai) {
+  final nama = (nilai ?? '').trim();
+  if (nama.isEmpty) return 'Nama lengkap tidak boleh kosong';
+  if (nama.length < 3) return 'Nama lengkap minimal 3 karakter';
+  return null;
+}

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/data_simulasi.dart';
+import '../services/layanan_es_teh.dart';
 import '../theme/app_colors.dart';
 
 /// Halaman Form Tambah Menu — halaman turunan dari MenuResepPage
@@ -13,9 +14,12 @@ import '../theme/app_colors.dart';
 /// - AutovalidateMode.onUserInteraction
 /// - TextEditingController dengan dispose()
 /// - Tombol Simpan memvalidasi seluruh form, SnackBar saat sukses
-/// - Data valid disimpan ke `List<Menu> daftarMenu` di memori
+/// - Minggu 10: data valid disimpan ke collection `menu` di Cloud Firestore
 class MenuFormPage extends StatefulWidget {
-  const MenuFormPage({super.key});
+  /// Daftar menu saat ini, untuk validasi nama duplikat di form.
+  final List<Menu> daftarMenu;
+
+  const MenuFormPage({super.key, required this.daftarMenu});
 
   @override
   State<MenuFormPage> createState() => _MenuFormPageState();
@@ -32,6 +36,7 @@ class _MenuFormPageState extends State<MenuFormPage> {
   // State untuk dropdown dan switch
   String? _kategoriDipilih;
   bool _ketersediaan = true;
+  bool _sedangMenyimpan = false;
 
   // Daftar kategori untuk dropdown
   static const List<String> _daftarKategori = [
@@ -55,23 +60,7 @@ class _MenuFormPageState extends State<MenuFormPage> {
   /// - Tidak boleh kosong
   /// - Minimal 3 karakter
   /// - Tidak boleh duplikat dengan menu yang sudah ada
-  String? _validasiNama(String? value) {
-    final nama = value?.trim() ?? '';
-    if (nama.isEmpty) {
-      return 'Nama menu tidak boleh kosong';
-    }
-    if (nama.length < 3) {
-      return 'Nama menu minimal 3 karakter';
-    }
-    // Cek duplikat (case-insensitive)
-    final sudahAda = daftarMenu.any(
-      (m) => m.nama.toLowerCase() == nama.toLowerCase(),
-    );
-    if (sudahAda) {
-      return 'Nama menu sudah ada, gunakan nama lain';
-    }
-    return null; // null = valid
-  }
+  String? _validasiNama(String? value) => validasiNamaMenu(value, widget.daftarMenu);
 
   /// Validator untuk kategori (dropdown)
   /// - Tidak boleh null/kosong
@@ -107,43 +96,49 @@ class _MenuFormPageState extends State<MenuFormPage> {
   }
 
   /// Aksi tombol Simpan
-  /// Validasi seluruh form, jika valid → tambahkan ke daftarMenu → SnackBar → pop
-  void _simpan() {
-    // validate() memanggil semua validator dan mengembalikan true jika semua valid
-    if (_formKey.currentState!.validate()) {
-      // Buat objek Menu baru
-      final menuBaru = Menu(
-        id: 'menu${DateTime.now().millisecondsSinceEpoch}',
-        nama: _namaController.text.trim(),
-        kategori: _kategoriDipilih!,
-        harga: int.parse(_hargaController.text.trim()),
-        ketersediaan: _ketersediaan,
-      );
-
-      // Simpan ke List di memori.
-      // Menu baru ditaruh di urutan teratas supaya langsung terlihat
-      // setelah kembali ke halaman daftar.
-      daftarMenu.insert(0, menuBaru);
-
-      // Tampilkan SnackBar sukses
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Menu "${menuBaru.nama}" berhasil ditambahkan'),
-          backgroundColor: AppColors.success,
-        ),
-      );
-
-      // Kembali ke halaman daftar (mengembalikan true agar pemanggil tahu ada data baru)
-      Navigator.pop(context, true);
-    } else {
-      // Form tidak valid — tampilkan SnackBar error
+  /// Validasi form → simpan ke Firestore → SnackBar → kembali ke daftar
+  Future<void> _simpan() async {
+    if (!_formKey.currentState!.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Periksa kembali data yang dimasukkan'),
           backgroundColor: AppColors.error,
         ),
       );
+      return;
     }
+
+    final nama = _namaController.text.trim();
+    setState(() => _sedangMenyimpan = true);
+    try {
+      await LayananScope.of(context).tambahMenu(
+        nama: nama,
+        kategori: _kategoriDipilih!,
+        harga: int.parse(_hargaController.text.trim()),
+        ketersediaan: _ketersediaan,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Menu "$nama" berhasil ditambahkan'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+      Navigator.pop(context, true);
+    } on NamaMenuDuplikatException catch (e) {
+      _tampilkanGagal(e.pesan);
+    } catch (_) {
+      _tampilkanGagal('Gagal menyimpan menu. Periksa koneksi lalu coba lagi.');
+    } finally {
+      if (mounted) setState(() => _sedangMenyimpan = false);
+    }
+  }
+
+  void _tampilkanGagal(String pesan) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(pesan), backgroundColor: AppColors.error),
+    );
   }
 
   @override
@@ -235,8 +230,14 @@ class _MenuFormPageState extends State<MenuFormPage> {
 
             // --- Tombol Simpan ---
             FilledButton.icon(
-              onPressed: _simpan,
-              icon: const Icon(Icons.save),
+              onPressed: _sedangMenyimpan ? null : _simpan,
+              icon: _sedangMenyimpan
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.save),
               label: const Text('Simpan Menu'),
             ),
             const SizedBox(height: 8),

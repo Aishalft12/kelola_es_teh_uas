@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../data/data_simulasi.dart';
+import '../services/layanan_es_teh.dart';
 import 'laporan_page.dart';
 import 'menu_resep_page.dart';
 import 'penjualan_page.dart';
@@ -17,17 +17,27 @@ class HalamanUtama extends StatefulWidget {
 
 class _HalamanUtamaState extends State<HalamanUtama> {
   int _indeks = 0;
+  bool _sesiDisiapkan = false;
 
-  /// Halaman dibuat ulang setiap kali versi data berubah (mis. setelah
-  /// penjualan disimpan), supaya angka stok dan laporan langsung ikut
-  /// ter-update saat tab dibuka. Kunci `versi` memaksa Flutter membangun
-  /// ulang halaman, bukan memakai widget lama.
-  List<Widget> _halaman(int versi) => [
-        MenuResepPage(key: ValueKey('menu-$versi')),
-        PenjualanPage(key: ValueKey('jual-$versi')),
-        StokBahanPage(key: ValueKey('stok-$versi')),
-        LaporanPage(key: ValueKey('laporan-$versi')),
-      ];
+  /// Minggu 10: setiap halaman membaca Firestore lewat StreamBuilder,
+  /// jadi angka stok dan laporan selalu terbaru tanpa penanda versi.
+  static const List<Widget> _halaman = [
+    MenuResepPage(),
+    PenjualanPage(),
+    StokBahanPage(),
+    LaporanPage(),
+  ];
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_sesiDisiapkan) return;
+    _sesiDisiapkan = true;
+    // Pastikan profil users/{uid} ada dan data awal menu & bahan terisi.
+    LayananScope.of(context).siapkanSesi().catchError((Object e) {
+      debugPrint('Gagal menyiapkan sesi: $e');
+    });
+  }
 
   static const List<NavigationDestination> _tujuan = [
     NavigationDestination(
@@ -79,49 +89,42 @@ class _HalamanUtamaState extends State<HalamanUtama> {
   Widget build(BuildContext context) {
     final bool layarLebar = MediaQuery.sizeOf(context).width >= 600;
 
-    // Dengarkan versiData: setiap penjualan tersimpan, seluruh halaman
-    // dibangun ulang sehingga stok dan laporan menampilkan angka terbaru.
-    return ValueListenableBuilder<int>(
-      valueListenable: versiData,
-      builder: (context, versi, _) {
-        final halaman = _halaman(versi);
+    final halaman = _halaman;
 
-        if (layarLebar) {
-          // Layout web: NavigationRail di kiri + konten
-          return Scaffold(
-            body: Row(
-              children: [
-                NavigationRail(
-                  selectedIndex: _indeks,
-                  onDestinationSelected: (i) => setState(() => _indeks = i),
-                  destinations: _tujuanRail,
-                  extended: MediaQuery.sizeOf(context).width >= 900,
-                ),
-                const VerticalDivider(width: 1),
-                // Batasi lebar konten agar tidak terlalu lebar
-                Expanded(
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 720),
-                      child: halaman[_indeks],
-                    ),
-                  ),
-                ),
-              ],
+    if (layarLebar) {
+      // Layout web: NavigationRail di kiri + konten
+      return Scaffold(
+        body: Row(
+          children: [
+            NavigationRail(
+              selectedIndex: _indeks,
+              onDestinationSelected: (i) => setState(() => _indeks = i),
+              destinations: _tujuanRail,
+              extended: MediaQuery.sizeOf(context).width >= 900,
             ),
-          );
-        }
+            const VerticalDivider(width: 1),
+            // Batasi lebar konten agar tidak terlalu lebar
+            Expanded(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 720),
+                  child: halaman[_indeks],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
-        // Layout mobile: NavigationBar di bawah
-        return Scaffold(
-          body: halaman[_indeks],
-          bottomNavigationBar: NavigationBar(
-            selectedIndex: _indeks,
-            onDestinationSelected: (i) => setState(() => _indeks = i),
-            destinations: _tujuan,
-          ),
-        );
-      },
+    // Layout mobile: NavigationBar di bawah
+    return Scaffold(
+      body: halaman[_indeks],
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _indeks,
+        onDestinationSelected: (i) => setState(() => _indeks = i),
+        destinations: _tujuan,
+      ),
     );
   }
 }

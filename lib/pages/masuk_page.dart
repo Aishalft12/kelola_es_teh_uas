@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../auth/aturan_login.dart';
+import '../services/layanan_es_teh.dart';
 import '../theme/app_colors.dart';
 
 /// Halaman Masuk dan Daftar — satu halaman, dua mode.
@@ -16,6 +17,7 @@ class MasukPage extends StatefulWidget {
 
 class _MasukPageState extends State<MasukPage> {
   final _formKey = GlobalKey<FormState>();
+  final _namaController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _ulangiController = TextEditingController();
@@ -27,6 +29,7 @@ class _MasukPageState extends State<MasukPage> {
 
   @override
   void dispose() {
+    _namaController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _ulangiController.dispose();
@@ -54,13 +57,20 @@ class _MasukPageState extends State<MasukPage> {
     setState(() => _sedangProses = true);
     final email = _emailController.text.trim();
     final password = _passwordController.text;
+    final nama = _namaController.text.trim();
+    final layanan = LayananScope.of(context);
 
     try {
       if (_modeDaftar) {
-        await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        final kredensial = await FirebaseAuth.instance.createUserWithEmailAndPassword(
           email: email,
           password: password,
         );
+        // Minggu 10: simpan profil ke users/{uid} beserta nama lengkap
+        final uid = kredensial.user?.uid;
+        if (uid != null) {
+          await layanan.simpanPenggunaSaatLogin(uid: uid, email: email, namaLengkap: nama);
+        }
       } else {
         await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: email,
@@ -143,6 +153,24 @@ class _MasukPageState extends State<MasukPage> {
                           : (pilihan) => _gantiMode(pilihan.first),
                     ),
                     const SizedBox(height: 20),
+
+                    // Nama lengkap (hanya mode Daftar) — disimpan ke users/{uid}
+                    if (_modeDaftar) ...[
+                      TextFormField(
+                        key: const Key('kolom-nama'),
+                        controller: _namaController,
+                        onChanged: _hapusPesanGagal,
+                        textCapitalization: TextCapitalization.words,
+                        textInputAction: TextInputAction.next,
+                        decoration: const InputDecoration(
+                          labelText: 'Nama lengkap',
+                          prefixIcon: Icon(Icons.person_outline),
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: validasiNamaLengkap,
+                      ),
+                      const SizedBox(height: 16),
+                    ],
 
                     // Email
                     TextFormField(

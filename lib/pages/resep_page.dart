@@ -14,9 +14,8 @@ class ResepPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Filter resep untuk menu ini
-    final resepMenu =
-        daftarResep.where((r) => r.menuId == menu.id).toList();
+    // Resep tersimpan di dalam dokumen menu (denormalisasi)
+    final resepMenu = menu.resep;
 
     return Scaffold(
       appBar: AppBar(title: Text('Resep ${menu.nama}')),
@@ -69,7 +68,7 @@ class ResepPage extends StatelessWidget {
                             style: const TextStyle(fontSize: 16),
                           ),
                           subtitle: Text(
-                            '${resep.jumlahPerGelas.toStringAsFixed(0)} per gelas',
+                            '${formatJumlah(resep.jumlahPerGelas)} per gelas',
                             style: const TextStyle(fontSize: 14),
                           ),
                           trailing: const Icon(Icons.chevron_right),
