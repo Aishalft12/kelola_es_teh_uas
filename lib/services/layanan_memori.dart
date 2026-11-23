@@ -15,6 +15,7 @@ class LayananMemori implements LayananEsTeh {
   final List<Bahan> _bahan;
   final List<Penjualan> _penjualan = [];
   final _berubah = StreamController<void>.broadcast();
+  int _nomor = 0;
 
   LayananMemori({
     this.uidAktif = 'uji-1',
@@ -119,8 +120,69 @@ class LayananMemori implements LayananEsTeh {
       final baru = rencana.stokBaru[_bahan[i].id];
       if (baru != null) _bahan[i] = _bahan[i].denganStok(baru);
     }
-    _penjualan.add(rencana.penjualan);
+    _penjualan.add(rencana.penjualan.salin(id: 'jual-${++_nomor}'));
     _beriTahu();
     return HasilSimpan(true, 'Penjualan tersimpan — Total ${formatRupiah(rencana.penjualan.total)}');
+  }
+
+  /// Khusus tes: mengganti status penjualan (di aplikasi asli lewat Console).
+  void aturStatusPenjualan(String idPenjualan, String status) {
+    final i = _penjualan.indexWhere((p) => p.id == idPenjualan);
+    if (i < 0) return;
+    _penjualan[i] = _penjualan[i].salin(status: status);
+    _beriTahu();
+  }
+
+  void _terapkanStok(Map<String, double> stokBaru) {
+    for (var i = 0; i < _bahan.length; i++) {
+      final baru = stokBaru[_bahan[i].id];
+      if (baru != null) _bahan[i] = _bahan[i].denganStok(baru);
+    }
+  }
+
+  @override
+  Future<HasilSimpan> ubahPenjualan({
+    required String idPenjualan,
+    required Map<String, int> keranjang,
+    required Map<String, String> gula,
+    required List<Menu> daftarMenu,
+  }) async {
+    final i = _penjualan.indexWhere((p) => p.id == idPenjualan);
+    if (i < 0) return const HasilSimpan(false, 'Penjualan tidak ditemukan.');
+    final lama = _penjualan[i];
+    final alasan = alasanTidakBoleh(penjualan: lama, uidAktif: uidAktif, aksi: 'diubah');
+    if (alasan != null) return HasilSimpan(false, alasan);
+
+    final hasil = susunUbahPenjualan(
+      lama: lama,
+      keranjang: keranjang,
+      gula: gula,
+      daftarMenu: daftarMenu,
+      daftarBahan: _bahan,
+    );
+    final rencana = hasil.rencana;
+    if (rencana == null) return HasilSimpan(false, hasil.pesanGagal!);
+
+    _terapkanStok(rencana.stokBaru);
+    _penjualan[i] = rencana.penjualan;
+    _beriTahu();
+    return HasilSimpan(true, 'Perubahan tersimpan — Total ${formatRupiah(rencana.penjualan.total)}');
+  }
+
+  @override
+  Future<HasilSimpan> hapusPenjualan({
+    required String idPenjualan,
+    required List<Menu> daftarMenu,
+  }) async {
+    final i = _penjualan.indexWhere((p) => p.id == idPenjualan);
+    if (i < 0) return const HasilSimpan(false, 'Penjualan tidak ditemukan.');
+    final lama = _penjualan[i];
+    final alasan = alasanTidakBoleh(penjualan: lama, uidAktif: uidAktif, aksi: 'dihapus');
+    if (alasan != null) return HasilSimpan(false, alasan);
+
+    _terapkanStok(stokSetelahBatal(lama, daftarMenu, _bahan));
+    _penjualan.removeAt(i);
+    _beriTahu();
+    return const HasilSimpan(true, 'Penjualan dihapus — stok bahan dikembalikan');
   }
 }

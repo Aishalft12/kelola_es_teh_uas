@@ -49,6 +49,24 @@ abstract class LayananEsTeh {
     required Map<String, String> gula,
     required List<Menu> daftarMenu,
   });
+
+  /// Minggu 11 — ubah penjualan milik sendiri yang masih Tercatat.
+  /// Stok penjualan lama dikembalikan dulu, lalu keranjang baru diperiksa.
+  /// Hanya field isi penjualan yang diubah (update), id_pengguna, tanggal,
+  /// dan status tetap.
+  Future<HasilSimpan> ubahPenjualan({
+    required String idPenjualan,
+    required Map<String, int> keranjang,
+    required Map<String, String> gula,
+    required List<Menu> daftarMenu,
+  });
+
+  /// Minggu 11 — hapus (batalkan) penjualan milik sendiri yang masih
+  /// Tercatat. Stok bahan dikembalikan sesuai resep.
+  Future<HasilSimpan> hapusPenjualan({
+    required String idPenjualan,
+    required List<Menu> daftarMenu,
+  });
 }
 
 class NamaMenuDuplikatException implements Exception {

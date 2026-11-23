@@ -73,7 +73,14 @@ class LayananFirestore implements LayananEsTeh {
     if (user == null) return Stream.value(const []);
     return _penjualan.where('id_pengguna', isEqualTo: user.uid).snapshots().map((snap) {
       final daftar = snap.docs
-          .map((d) => Penjualan.fromMap(d.id, d.data(), tanggal: _waktu(d.data()['tanggal'])))
+          .map((d) => Penjualan.fromMap(
+                d.id,
+                d.data(),
+                tanggal: _waktu(d.data()['tanggal']),
+                diubahPada: d.data()['diubah_pada'] is Timestamp
+                    ? (d.data()['diubah_pada'] as Timestamp).toDate()
+                    : null,
+              ))
           .toList()
         ..sort((a, b) => b.tanggal.compareTo(a.tanggal));
       return daftar;
@@ -224,13 +231,122 @@ class LayananFirestore implements LayananEsTeh {
       return HasilSimpan(false, pesanGagalFirestore(e.code));
     }
   }
+
+  // ===== UPDATE & DELETE (Minggu 11) =====
+
+  /// Baca bahan-bahan tertentu di dalam transaction.
+  Future<List<Bahan>> _bacaBahan(Transaction tx, Iterable<String> idBahan) async {
+    final hasil = <Bahan>[];
+    for (final id in idBahan) {
+      final snap = await tx.get(_bahan.doc(id));
+      final data = snap.data();
+      if (data != null) hasil.add(Bahan.fromMap(snap.id, data));
+    }
+    return hasil;
+  }
+
+  /// Urutan pemeriksaan: sudah login → dokumen ada → pemilik → status
+  /// Tercatat → stok cukup (penjualan lama dikembalikan dulu) → update().
+  /// update() hanya menyebut isi penjualan, sehingga id_pengguna, tanggal,
+  /// dan status tidak ikut berubah.
+  @override
+  Future<HasilSimpan> ubahPenjualan({
+    required String idPenjualan,
+    required Map<String, int> keranjang,
+    required Map<String, String> gula,
+    required List<Menu> daftarMenu,
+  }) async {
+    final user = _auth.currentUser;
+    if (user == null) return const HasilSimpan(false, 'Sesi berakhir. Silakan masuk kembali.');
+    final ref = _penjualan.doc(idPenjualan);
+
+    try {
+      return await _db.runTransaction<HasilSimpan>((tx) async {
+        final snap = await tx.get(ref);
+        final data = snap.data();
+        if (data == null) return const HasilSimpan(false, 'Penjualan tidak ditemukan.');
+        final lama = Penjualan.fromMap(snap.id, data, tanggal: _waktu(data['tanggal']));
+
+        final alasan = alasanTidakBoleh(penjualan: lama, uidAktif: user.uid, aksi: 'diubah');
+        if (alasan != null) return HasilSimpan(false, alasan);
+
+        final idBahan = {
+          ...kebutuhanBahanKeranjang(lama.keranjang, daftarMenu).keys,
+          ...kebutuhanBahanKeranjang(keranjang, daftarMenu).keys,
+        };
+        final bahanTerbaru = await _bacaBahan(tx, idBahan);
+
+        final hasil = susunUbahPenjualan(
+          lama: lama,
+          keranjang: keranjang,
+          gula: gula,
+          daftarMenu: daftarMenu,
+          daftarBahan: bahanTerbaru,
+        );
+        final rencana = hasil.rencana;
+        if (rencana == null) return HasilSimpan(false, hasil.pesanGagal!);
+
+        rencana.stokBaru.forEach((id, stok) {
+          tx.update(_bahan.doc(id), {'stok': stok});
+        });
+        final baru = rencana.penjualan;
+        tx.update(ref, {
+          'items': baru.items.map((i) => i.toMap()).toList(),
+          'total': baru.total,
+          'biaya_bahan': baru.totalBiayaBahan,
+          'laba_kotor': baru.labaKotor,
+          'diubah_pada': FieldValue.serverTimestamp(),
+        });
+        return HasilSimpan(true, 'Perubahan tersimpan — Total ${formatRupiah(baru.total)}');
+      });
+    } on FirebaseException catch (e) {
+      return HasilSimpan(false, pesanGagalFirestore(e.code));
+    }
+  }
+
+  /// Hapus penjualan: stok bahan dikembalikan lalu dokumen dihapus,
+  /// keduanya dalam satu transaction.
+  @override
+  Future<HasilSimpan> hapusPenjualan({
+    required String idPenjualan,
+    required List<Menu> daftarMenu,
+  }) async {
+    final user = _auth.currentUser;
+    if (user == null) return const HasilSimpan(false, 'Sesi berakhir. Silakan masuk kembali.');
+    final ref = _penjualan.doc(idPenjualan);
+
+    try {
+      return await _db.runTransaction<HasilSimpan>((tx) async {
+        final snap = await tx.get(ref);
+        final data = snap.data();
+        if (data == null) return const HasilSimpan(false, 'Penjualan tidak ditemukan.');
+        final lama = Penjualan.fromMap(snap.id, data, tanggal: _waktu(data['tanggal']));
+
+        final alasan = alasanTidakBoleh(penjualan: lama, uidAktif: user.uid, aksi: 'dihapus');
+        if (alasan != null) return HasilSimpan(false, alasan);
+
+        final idBahan = kebutuhanBahanKeranjang(lama.keranjang, daftarMenu).keys;
+        final bahanTerbaru = await _bacaBahan(tx, idBahan);
+
+        stokSetelahBatal(lama, daftarMenu, bahanTerbaru).forEach((id, stok) {
+          tx.update(_bahan.doc(id), {'stok': stok});
+        });
+        tx.delete(ref);
+        return const HasilSimpan(true, 'Penjualan dihapus — stok bahan dikembalikan');
+      });
+    } on FirebaseException catch (e) {
+      return HasilSimpan(false, pesanGagalFirestore(e.code));
+    }
+  }
 }
 
 /// Pesan ramah untuk kode error Firestore.
 String pesanGagalFirestore(String kode) {
   switch (kode) {
     case 'permission-denied':
-      return 'Akses ditolak. Silakan masuk kembali.';
+      return 'Akses ditolak — data ini bukan milik Anda atau sudah dikunci.';
+    case 'not-found':
+      return 'Data tidak ditemukan, mungkin sudah dihapus.';
     case 'unavailable':
       return 'Tidak dapat terhubung ke server. Periksa koneksi internet.';
     default:

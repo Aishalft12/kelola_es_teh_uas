@@ -206,6 +206,12 @@ class PenjualanItem {
       );
 }
 
+/// Status penjualan (Minggu 11).
+/// Tercatat : masih boleh diubah/dihapus oleh pemiliknya.
+/// Dikunci  : sudah direkap/disetor (diisi manual di Console), tidak boleh diubah.
+const String statusTercatat = 'Tercatat';
+const String statusDikunci = 'Dikunci';
+
 /// Penjualan — collection `penjualan`, satu dokumen per transaksi.
 class Penjualan {
   final String id;
@@ -213,6 +219,8 @@ class Penjualan {
   final DateTime tanggal;
   final List<PenjualanItem> items;
   final int total;
+  final String status;
+  final DateTime? diubahPada;
 
   const Penjualan({
     this.id = '',
@@ -220,7 +228,34 @@ class Penjualan {
     required this.tanggal,
     required this.items,
     required this.total,
+    this.status = statusTercatat,
+    this.diubahPada,
   });
+
+  /// Menu Ubah/Hapus hanya aktif selama status masih Tercatat.
+  bool get bisaDiubah => status == statusTercatat;
+
+  /// Keranjang (menuId → jumlah) dari baris penjualan, untuk mode ubah.
+  Map<String, int> get keranjang {
+    final hasil = <String, int>{};
+    for (final i in items) {
+      hasil[i.menuId] = (hasil[i.menuId] ?? 0) + i.jumlah;
+    }
+    return hasil;
+  }
+
+  /// Tingkat gula per menu, untuk mode ubah.
+  Map<String, String> get gula => {for (final i in items) i.menuId: i.tingkatGula};
+
+  Penjualan salin({String? id, String? status}) => Penjualan(
+        id: id ?? this.id,
+        idPengguna: idPengguna,
+        tanggal: tanggal,
+        items: items,
+        total: total,
+        status: status ?? this.status,
+        diubahPada: diubahPada,
+      );
 
   int get totalBiayaBahan => items.fold(0, (sum, item) => sum + item.biayaBahan);
 
@@ -233,14 +268,19 @@ class Penjualan {
         'total': total,
         'biaya_bahan': totalBiayaBahan,
         'laba_kotor': labaKotor,
+        'status': status,
         'items': items.map((i) => i.toMap()).toList(),
       };
 
-  factory Penjualan.fromMap(String id, Map<String, dynamic> d, {required DateTime tanggal}) =>
+  factory Penjualan.fromMap(String id, Map<String, dynamic> d,
+          {required DateTime tanggal, DateTime? diubahPada}) =>
       Penjualan(
         id: id,
         idPengguna: (d['id_pengguna'] as String?) ?? '',
         tanggal: tanggal,
+        // Dokumen Minggu 10 belum punya field status → dianggap Tercatat
+        status: (d['status'] as String?) ?? statusTercatat,
+        diubahPada: diubahPada,
         total: _keInt(d['total']),
         items: ((d['items'] as List?) ?? const [])
             .map((i) => PenjualanItem.fromMap(Map<String, dynamic>.from(i as Map)))
@@ -484,4 +524,78 @@ String? validasiNamaMenu(String? value, List<Menu> daftarMenu) {
   final sudahAda = daftarMenu.any((m) => m.nama.toLowerCase() == nama.toLowerCase());
   if (sudahAda) return 'Nama menu sudah ada, gunakan nama lain';
   return null;
+}
+
+// ===== Minggu 11: ubah & hapus penjualan =====
+
+/// Aturan bisnis ubah/hapus: hanya pemilik dan hanya status Tercatat.
+/// Mengembalikan null bila boleh, atau pesan penolakan bila tidak.
+String? alasanTidakBoleh({
+  required Penjualan penjualan,
+  required String uidAktif,
+  required String aksi,
+}) {
+  if (penjualan.idPengguna != uidAktif) {
+    return 'Penjualan ini bukan milik Anda, tidak bisa $aksi.';
+  }
+  if (!penjualan.bisaDiubah) {
+    return 'Penjualan berstatus ${penjualan.status} tidak bisa $aksi.';
+  }
+  return null;
+}
+
+/// Daftar bahan dengan stok ditambah [kembali] (bahanId → jumlah).
+List<Bahan> stokDikembalikan(List<Bahan> daftarBahan, Map<String, double> kembali) => [
+      for (final b in daftarBahan) b.denganStok(b.stok + (kembali[b.id] ?? 0)),
+    ];
+
+/// Hapus/batalkan penjualan: stok baru tiap bahan setelah resep dikembalikan.
+Map<String, double> stokSetelahBatal(Penjualan lama, List<Menu> daftarMenu, List<Bahan> daftarBahan) {
+  final kembali = kebutuhanBahanKeranjang(lama.keranjang, daftarMenu);
+  return {
+    for (final b in stokDikembalikan(daftarBahan, kembali))
+      if (kembali.containsKey(b.id)) b.id: b.stok,
+  };
+}
+
+/// Ubah penjualan. Seperti cek bentrok yang mengecualikan dokumen sendiri:
+/// stok yang dipakai penjualan lama DIKEMBALIKAN dulu, baru keranjang baru
+/// diperiksa. Tanpa langkah ini, mengubah 2 gelas menjadi 2 gelas pun bisa
+/// ditolak karena stoknya dianggap terpakai dua kali.
+HasilSusun susunUbahPenjualan({
+  required Penjualan lama,
+  required Map<String, int> keranjang,
+  required Map<String, String> gula,
+  required List<Menu> daftarMenu,
+  required List<Bahan> daftarBahan,
+}) {
+  final kembali = kebutuhanBahanKeranjang(lama.keranjang, daftarMenu);
+  final bahanEfektif = stokDikembalikan(daftarBahan, kembali);
+
+  final hasil = susunPenjualan(
+    keranjang: keranjang,
+    gula: gula,
+    daftarMenu: daftarMenu,
+    daftarBahan: bahanEfektif,
+    idPengguna: lama.idPengguna,
+    tanggal: lama.tanggal,
+  );
+  final rencana = hasil.rencana;
+  if (rencana == null) return hasil;
+
+  // Bahan yang hanya dipakai penjualan lama tetap harus dikembalikan.
+  final stokBaru = Map<String, double>.of(rencana.stokBaru);
+  for (final b in bahanEfektif) {
+    if (kembali.containsKey(b.id)) stokBaru.putIfAbsent(b.id, () => b.stok);
+  }
+  final penjualanBaru = Penjualan(
+    id: lama.id,
+    idPengguna: lama.idPengguna,
+    tanggal: lama.tanggal,
+    items: rencana.penjualan.items,
+    total: rencana.penjualan.total,
+    status: lama.status,
+    diubahPada: DateTime.now(),
+  );
+  return HasilSusun.berhasil(RencanaPenjualan(penjualanBaru, stokBaru));
 }

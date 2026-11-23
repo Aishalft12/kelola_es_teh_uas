@@ -1,10 +1,44 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Otorisasi dasar Minggu 10: hanya pengguna yang sudah login
-    // yang boleh membaca dan menulis data aplikasi Es Teh.
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+
+    function sudahMasuk() {
+      return request.auth != null;
+    }
+
+    function pemilik(data) {
+      return sudahMasuk() && data.id_pengguna == request.auth.uid;
+    }
+
+    // Dokumen Minggu 10 belum punya field status → dianggap Tercatat
+    function masihTercatat(data) {
+      return data.get('status', 'Tercatat') == 'Tercatat';
+    }
+
+    // Profil: hanya pemiliknya sendiri
+    match /users/{uid} {
+      allow read, write: if sudahMasuk() && request.auth.uid == uid;
+    }
+
+    // Data master usaha: semua pengguna yang login
+    match /menu/{idMenu} {
+      allow read, write: if sudahMasuk();
+    }
+    match /bahan/{idBahan} {
+      allow read, write: if sudahMasuk();
+    }
+
+    // Penjualan: hanya pemilik, ubah/hapus hanya selama status Tercatat
+    match /penjualan/{idPenjualan} {
+      allow create: if pemilik(request.resource.data)
+                    && request.resource.data.status == 'Tercatat';
+      allow read: if pemilik(resource.data);
+      allow update: if pemilik(resource.data)
+                    && masihTercatat(resource.data)
+                    && request.resource.data.id_pengguna == resource.data.id_pengguna
+                    && masihTercatat(request.resource.data);
+      allow delete: if pemilik(resource.data)
+                    && masihTercatat(resource.data);
     }
   }
 }
