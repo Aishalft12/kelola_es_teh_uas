@@ -6,12 +6,15 @@ import '../theme/app_colors.dart';
 import '../widgets/keadaan_kosong.dart';
 import '../widgets/keadaan_stream.dart';
 import '../widgets/tombol_keluar.dart';
+import 'penjualan_page.dart';
 
 /// Halaman Laporan — frame Must dari wireframe Figma
 /// Menampilkan: pilihan periode, total penjualan, laba kotor,
 /// menu terlaris, keadaan kosong
 /// Minggu 10: dibaca real-time dari collection `penjualan`, hanya milik
 /// pengguna yang sedang login.
+/// Minggu 11: setiap penjualan punya menu aksi Ubah dan Hapus (aktif hanya
+/// selama status Tercatat); hapus selalu lewat dialog konfirmasi.
 class LaporanPage extends StatefulWidget {
   const LaporanPage({super.key});
 
@@ -28,6 +31,59 @@ class _LaporanPageState extends State<LaporanPage> {
     super.didChangeDependencies();
     _streamPenjualan ??= LayananScope.of(context).streamPenjualanSaya();
   }
+
+  /// Mode ubah: buka halaman Penjualan yang sama dengan data lama terisi.
+  void _ubah(Penjualan p) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => PenjualanPage(penjualanAwal: p)),
+    );
+  }
+
+  /// Hapus selalu lewat dialog konfirmasi. Batal = tidak ada perubahan.
+  Future<void> _hapus(Penjualan p) async {
+    final ringkas = p.items.map((i) => '${i.jumlah}× ${i.namaMenu}').join(', ');
+    final yakin = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Hapus penjualan?'),
+        content: Text(
+          'Penjualan ${_formatWaktu(p.tanggal)} ($ringkas, ${formatRupiah(p.total)}) '
+          'akan dihapus permanen dan stok bahannya dikembalikan.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.error,
+              minimumSize: const Size(0, 40),
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+    if (yakin != true || !mounted) return;
+
+    final layanan = LayananScope.of(context);
+    final daftarMenu = await layanan.streamMenu().first;
+    final hasil = await layanan.hapusPenjualan(idPenjualan: p.id, daftarMenu: daftarMenu);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(hasil.pesan),
+        backgroundColor: hasil.berhasil ? AppColors.success : AppColors.error,
+      ),
+    );
+  }
+
+  static String _formatWaktu(DateTime t) =>
+      '${t.day}/${t.month}/${t.year} • '
+      '${t.hour.toString().padLeft(2, '0')}.${t.minute.toString().padLeft(2, '0')}';
 
   @override
   Widget build(BuildContext context) {
@@ -284,16 +340,47 @@ class _LaporanPageState extends State<LaporanPage> {
                           child: ExpansionTile(
                             leading: const Icon(Icons.receipt),
                             title: Text(
-                              '${p.tanggal.day}/${p.tanggal.month}/${p.tanggal.year} • '
-                              '${p.tanggal.hour.toString().padLeft(2, '0')}.${p.tanggal.minute.toString().padLeft(2, '0')}',
+                              _formatWaktu(p.tanggal),
                               style: const TextStyle(fontSize: 16),
                             ),
                             subtitle: Text(
-                              formatRupiah(p.total),
-                              style: const TextStyle(
+                              '${formatRupiah(p.total)} • ${p.status}'
+                              '${p.diubahPada != null ? ' • diubah' : ''}',
+                              style: TextStyle(
                                 fontSize: 14,
-                                color: AppColors.primary,
+                                color: p.bisaDiubah ? AppColors.primary : AppColors.textSecondary,
                               ),
+                            ),
+                            // Menu aksi: aktif hanya untuk status Tercatat
+                            trailing: PopupMenuButton<String>(
+                              key: Key('aksi-${p.id}'),
+                              tooltip: 'Aksi penjualan',
+                              icon: Icon(p.bisaDiubah ? Icons.more_vert : Icons.lock_outline),
+                              onSelected: (aksi) {
+                                if (aksi == 'ubah') {
+                                  _ubah(p);
+                                } else {
+                                  _hapus(p);
+                                }
+                              },
+                              itemBuilder: (_) => [
+                                PopupMenuItem(
+                                  value: 'ubah',
+                                  enabled: p.bisaDiubah,
+                                  child: const ListTile(
+                                    leading: Icon(Icons.edit),
+                                    title: Text('Ubah'),
+                                  ),
+                                ),
+                                PopupMenuItem(
+                                  value: 'hapus',
+                                  enabled: p.bisaDiubah,
+                                  child: const ListTile(
+                                    leading: Icon(Icons.delete_outline, color: AppColors.error),
+                                    title: Text('Hapus'),
+                                  ),
+                                ),
+                              ],
                             ),
                             children: [
                               for (final item in p.items)

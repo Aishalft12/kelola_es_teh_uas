@@ -12,8 +12,14 @@ import '../widgets/tombol_keluar.dart';
 /// total, tombol Simpan Penjualan
 /// Minggu 10: menu & bahan dibaca real-time dari Firestore; penjualan disimpan
 /// ke collection `penjualan` dengan validasi stok (ditolak bila tidak cukup).
+/// Minggu 11: satu halaman, dua mode. Bila [penjualanAwal] diisi, halaman
+/// bekerja sebagai mode ubah: jumlah & gula terisi data lama dan tombol
+/// menjadi "Simpan Perubahan".
 class PenjualanPage extends StatefulWidget {
-  const PenjualanPage({super.key});
+  /// null = mode tambah; terisi = mode ubah
+  final Penjualan? penjualanAwal;
+
+  const PenjualanPage({super.key, this.penjualanAwal});
 
   @override
   State<PenjualanPage> createState() => _PenjualanPageState();
@@ -28,6 +34,19 @@ class _PenjualanPageState extends State<PenjualanPage> {
   Stream<List<Menu>>? _streamMenu;
   Stream<List<Bahan>>? _streamBahan;
   bool _sedangMenyimpan = false;
+
+  bool get _modeUbah => widget.penjualanAwal != null;
+
+  @override
+  void initState() {
+    super.initState();
+    // Mode ubah: isi awal dari data lama
+    final awal = widget.penjualanAwal;
+    if (awal != null) {
+      _jumlahDipilih.addAll(awal.keranjang);
+      _gulaDipilih.addAll(awal.gula);
+    }
+  }
 
   @override
   void didChangeDependencies() {
@@ -58,13 +77,26 @@ class _PenjualanPageState extends State<PenjualanPage> {
 
   Future<void> _simpanPenjualan(List<Menu> daftarMenu) async {
     setState(() => _sedangMenyimpan = true);
-    // Layanan memeriksa stok terbaru di server (B3), mengurangi stok (B1),
-    // dan mencatat penjualan beserta biaya bahan (B2) dalam satu transaksi.
-    final hasil = await LayananScope.of(context).simpanPenjualan(
-      keranjang: Map.of(_jumlahDipilih),
-      gula: Map.of(_gulaDipilih),
-      daftarMenu: daftarMenu,
-    );
+    final layanan = LayananScope.of(context);
+
+    // Satu tombol, dua tujuan.
+    // Tambah: cek stok (B3), kurangi stok (B1), catat penjualan (B2).
+    // Ubah: stok penjualan lama dikembalikan dulu, baru keranjang baru dicek.
+    final HasilSimpan hasil;
+    if (_modeUbah) {
+      hasil = await layanan.ubahPenjualan(
+        idPenjualan: widget.penjualanAwal!.id,
+        keranjang: Map.of(_jumlahDipilih),
+        gula: Map.of(_gulaDipilih),
+        daftarMenu: daftarMenu,
+      );
+    } else {
+      hasil = await layanan.simpanPenjualan(
+        keranjang: Map.of(_jumlahDipilih),
+        gula: Map.of(_gulaDipilih),
+        daftarMenu: daftarMenu,
+      );
+    }
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -73,6 +105,11 @@ class _PenjualanPageState extends State<PenjualanPage> {
         backgroundColor: hasil.berhasil ? AppColors.success : AppColors.error,
       ),
     );
+
+    if (_modeUbah && hasil.berhasil) {
+      Navigator.pop(context, true);
+      return;
+    }
 
     setState(() {
       _sedangMenyimpan = false;
@@ -88,8 +125,8 @@ class _PenjualanPageState extends State<PenjualanPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Penjualan'),
-        actions: const [TombolKeluar()],
+        title: Text(_modeUbah ? 'Ubah Penjualan' : 'Penjualan'),
+        actions: _modeUbah ? null : const [TombolKeluar()],
       ),
       body: StreamBuilder<List<Menu>>(
         stream: _streamMenu,
@@ -314,7 +351,7 @@ class _PenjualanPageState extends State<PenjualanPage> {
                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         )
                       : const Icon(Icons.save),
-                  label: const Text('Simpan Penjualan'),
+                  label: Text(_modeUbah ? 'Simpan Perubahan' : 'Simpan Penjualan'),
                 ),
               ],
             ),
