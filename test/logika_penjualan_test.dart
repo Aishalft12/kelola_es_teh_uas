@@ -122,4 +122,124 @@ void main() {
     await layanan.simpanPenggunaSaatLogin(uid: 'akun-a', email: 'pemilik@esteh.id');
     expect((await layanan.streamPenggunaSaya().first)?.namaLengkap, 'Bu Rina');
   });
+
+  group('Minggu 11 — ubah & hapus penjualan', () {
+    Future<String> jual(LayananMemori l, Map<String, int> keranjang) async {
+      final hasil = await l.simpanPenjualan(keranjang: keranjang, gula: {}, daftarMenu: menuAwal);
+      expect(hasil.berhasil, isTrue, reason: hasil.pesan);
+      return l.semuaPenjualan.last.id;
+    }
+
+    test('Ubah valid — stok disesuaikan, pemilik & tanggal tetap', () async {
+      final l = LayananMemori(uidAktif: 'akun-a');
+      final id = await jual(l, {'menu1': 2}); // gula 110 → 80
+      final tanggalAwal = l.semuaPenjualan.single.tanggal;
+
+      final hasil = await l.ubahPenjualan(
+        idPenjualan: id,
+        keranjang: {'menu1': 3},
+        gula: {'menu1': 'Less'},
+        daftarMenu: menuAwal,
+      );
+
+      expect(hasil.berhasil, isTrue, reason: hasil.pesan);
+      final p = l.semuaPenjualan.single;
+      expect(p.total, 15000);
+      expect(p.items.single.tingkatGula, 'Less');
+      expect(p.idPengguna, 'akun-a'); // field audit tetap
+      expect(p.tanggal, tanggalAwal);
+      expect(p.status, statusTercatat);
+      expect(p.diubahPada, isNotNull);
+      expect(bahan(l, 'bahan2').stok, 65); // 110 − 3 × 15
+      expect(bahan(l, 'bahan1').stok, 95); // 110 − 3 × 5
+    });
+
+    test('Ubah tanpa menambah jumlah tidak ditolak (stok lama dikembalikan dulu)', () async {
+      final l = LayananMemori();
+      final id = await jual(l, {'menu1': 2}); // gula 80
+      await jual(l, {'menu1': 5}); // gula 5
+
+      // Tetap 2 gelas: butuh 30 g, stok tinggal 5 g + 30 g milik penjualan ini
+      final hasil = await l.ubahPenjualan(
+        idPenjualan: id,
+        keranjang: {'menu1': 2},
+        gula: {'menu1': 'Extra'},
+        daftarMenu: menuAwal,
+      );
+
+      expect(hasil.berhasil, isTrue, reason: hasil.pesan);
+      expect(bahan(l, 'bahan2').stok, 5);
+    });
+
+    test('Ubah melebihi stok ditolak, data lama utuh', () async {
+      final l = LayananMemori();
+      final id = await jual(l, {'menu1': 2}); // gula 80
+
+      final hasil = await l.ubahPenjualan(
+        idPenjualan: id,
+        keranjang: {'menu1': 8}, // butuh 120 g, tersedia 80 + 30 = 110 g
+        gula: {},
+        daftarMenu: menuAwal,
+      );
+
+      expect(hasil.berhasil, isFalse);
+      expect(hasil.pesan, 'Stok bahan tidak cukup — Gula kurang 10 gram');
+      expect(l.semuaPenjualan.single.total, 10000);
+      expect(bahan(l, 'bahan2').stok, 80);
+    });
+
+    test('Ubah ke menu lain — bahan yang tidak dipakai lagi dikembalikan', () async {
+      final l = LayananMemori();
+      final id = await jual(l, {'menu1': 2}); // gula 80, susu 500
+
+      final hasil = await l.ubahPenjualan(
+        idPenjualan: id,
+        keranjang: {'menu2': 1}, // Es Teh Susu: tanpa gula, 30 ml susu
+        gula: {},
+        daftarMenu: menuAwal,
+      );
+
+      expect(hasil.berhasil, isTrue, reason: hasil.pesan);
+      expect(bahan(l, 'bahan2').stok, 110); // gula kembali utuh
+      expect(bahan(l, 'bahan3').stok, 470);
+    });
+
+    test('Hapus mengembalikan stok dan menghilangkan penjualan', () async {
+      final l = LayananMemori();
+      final id = await jual(l, {'menu1': 2});
+
+      final hasil = await l.hapusPenjualan(idPenjualan: id, daftarMenu: menuAwal);
+
+      expect(hasil.berhasil, isTrue);
+      expect(l.semuaPenjualan, isEmpty);
+      expect(bahan(l, 'bahan2').stok, 110);
+      expect(bahan(l, 'bahan4').stok, 200);
+    });
+
+    test('Status Dikunci tidak bisa diubah maupun dihapus', () async {
+      final l = LayananMemori();
+      final id = await jual(l, {'menu1': 1});
+      l.aturStatusPenjualan(id, statusDikunci);
+
+      final ubah = await l.ubahPenjualan(idPenjualan: id, keranjang: {'menu1': 2}, gula: {}, daftarMenu: menuAwal);
+      final hapus = await l.hapusPenjualan(idPenjualan: id, daftarMenu: menuAwal);
+
+      expect(ubah.berhasil, isFalse);
+      expect(ubah.pesan, 'Penjualan berstatus Dikunci tidak bisa diubah.');
+      expect(hapus.berhasil, isFalse);
+      expect(l.semuaPenjualan.single.bisaDiubah, isFalse);
+    });
+
+    test('Penjualan milik akun lain ditolak', () async {
+      final l = LayananMemori(uidAktif: 'akun-a');
+      final id = await jual(l, {'menu1': 1});
+
+      l.uidAktif = 'akun-b';
+      final hasil = await l.hapusPenjualan(idPenjualan: id, daftarMenu: menuAwal);
+
+      expect(hasil.berhasil, isFalse);
+      expect(hasil.pesan, 'Penjualan ini bukan milik Anda, tidak bisa dihapus.');
+      expect(l.semuaPenjualan.length, 1);
+    });
+  });
 }

@@ -270,6 +270,118 @@ service cloud.firestore {
 ![Collection bahan](screenshots/firestore-bahan.png)
 ![Collection penjualan](screenshots/firestore-penjualan.png)
 
+## CRUD Lengkap: Ubah & Hapus (Minggu 11)
+
+Penjualan kini bisa **diubah** dan **dihapus** oleh pemiliknya sendiri, selama statusnya
+masih **Tercatat**. Status **Dikunci** (penjualan yang sudah direkap/disetor) diisi manual
+di Firebase Console dan membuat penjualan tidak bisa diubah lagi.
+
+### Pemetaan CRUD
+
+| Operasi | HTTP / REST | Firestore | Di aplikasi Es Teh |
+|---|---|---|---|
+| Create | `POST /penjualan` | `doc().set()` | Simpan Penjualan |
+| Read | `GET /penjualan` | `where(...).snapshots()` | Laporan (real-time) |
+| Update | `PATCH /penjualan/{id}` | `doc(id).update()` | Menu **Ubah** → halaman Penjualan mode ubah |
+| Delete | `DELETE /penjualan/{id}` | `doc(id).delete()` | Menu **Hapus** → dialog konfirmasi |
+
+### Aturan Bisnis
+
+| Aturan | Di kode | Di Security Rules |
+|---|---|---|
+| Hanya pemilik | `alasanTidakBoleh()`: `id_pengguna == uid` | `resource.data.id_pengguna == request.auth.uid` |
+| Hanya status Tercatat | menu aksi `enabled: p.bisaDiubah` | `data.get('status','Tercatat') == 'Tercatat'` |
+| Hapus wajib konfirmasi | `showDialog<bool>` sebelum `hapusPenjualan()` | — (tanggung jawab UI) |
+| Ubah: stok penjualan lama dikembalikan dulu | `susunUbahPenjualan()` | — (butuh hitungan lintas dokumen) |
+| Field audit tetap | `update()` hanya `items`, `total`, `biaya_bahan`, `laba_kotor`, `diubah_pada` | `id_pengguna` tidak boleh berubah |
+
+**Padanan "cek bentrok yang mengecualikan dokumen sendiri":** saat mengubah penjualan,
+stok yang dipakai penjualan lama dikembalikan dulu sebelum keranjang baru diperiksa.
+Tanpa langkah ini, mengubah 2 gelas menjadi 2 gelas pun bisa ditolak karena stoknya
+dianggap terpakai dua kali.
+
+Ubah dan hapus berjalan di dalam `runTransaction`, sehingga dokumen penjualan dan stok
+bahan selalu berubah bersamaan. Hapus mengembalikan stok bahan sesuai resep.
+
+### Security Rules Kepemilikan
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function sudahMasuk() {
+      return request.auth != null;
+    }
+
+    function pemilik(data) {
+      return sudahMasuk() && data.id_pengguna == request.auth.uid;
+    }
+
+    // Dokumen Minggu 10 belum punya field status → dianggap Tercatat
+    function masihTercatat(data) {
+      return data.get('status', 'Tercatat') == 'Tercatat';
+    }
+
+    // Profil: hanya pemiliknya sendiri
+    match /users/{uid} {
+      allow read, write: if sudahMasuk() && request.auth.uid == uid;
+    }
+
+    // Data master usaha: semua pengguna yang login
+    match /menu/{idMenu} {
+      allow read, write: if sudahMasuk();
+    }
+    match /bahan/{idBahan} {
+      allow read, write: if sudahMasuk();
+    }
+
+    // Penjualan: hanya pemilik, ubah/hapus hanya selama status Tercatat
+    match /penjualan/{idPenjualan} {
+      allow create: if pemilik(request.resource.data)
+                    && request.resource.data.status == 'Tercatat';
+      allow read: if pemilik(resource.data);
+      allow update: if pemilik(resource.data)
+                    && masihTercatat(resource.data)
+                    && request.resource.data.id_pengguna == resource.data.id_pengguna
+                    && masihTercatat(request.resource.data);
+      allow delete: if pemilik(resource.data)
+                    && masihTercatat(resource.data);
+    }
+  }
+}
+```
+
+### Tabel Uji CRUD
+
+| # | Kasus uji | Langkah | Hasil yang diharapkan | Hasil nyata |
+|---|---|---|---|---|
+| 1 | Ubah data valid | Laporan → ⋮ → Ubah, 2 → 3 gelas, Simpan Perubahan | Total & stok berubah; `tanggal`, `id_pengguna`, `status` tetap; `diubah_pada` terisi | Sesuai — total jadi Rp 15.000, `diubah_pada` terisi, `id_pengguna` tetap |
+| 2 | Ubah tanpa menambah jumlah | Ubah penjualan, ganti tingkat gula saja | Tersimpan, tidak ditolak karena stok sendiri | Sesuai — tersimpan, tidak ditolak |
+| 3 | Ubah melebihi stok | Ubah jumlah melebihi stok gula | Ditolak "Stok bahan tidak cukup…", data lama utuh | Sesuai — ditolak "Teh kurang 5 gram", data tetap Rp 15.000 |
+| 4 | Hapus dengan konfirmasi | ⋮ → Hapus → Hapus | Dialog muncul; dokumen hilang; stok kembali; SnackBar berhasil | Sesuai — dokumen hilang, stok kembali (Teh +15, Gula +45, Gelas +3) |
+| 5 | Hapus lalu Batal | ⋮ → Hapus → Batal | Dialog tertutup; data tetap ada | Sesuai — dialog tertutup, data tetap ada |
+| 6 | Status Dikunci | Ubah `status` jadi `Dikunci` di Console | Ikon gembok, menu Ubah/Hapus nonaktif | Sesuai — ikon gembok, menu Ubah/Hapus nonaktif |
+| 7 | Hapus milik akun lain | Rules Playground: `delete` dokumen penjualan dengan UID akun lain | Ditolak (*Simulated delete denied*) | Sesuai — *Simulated write denied* |
+
+### Bukti
+
+Dokumen setelah diubah (`diubah_pada` terisi, pemilik tetap):
+
+![Dokumen setelah diubah](screenshots/crud-diubah.png)
+
+Dialog konfirmasi hapus:
+
+![Dialog konfirmasi hapus](screenshots/crud-dialog-hapus.png)
+
+Status Dikunci — menu aksi terkunci:
+
+![Status Dikunci](screenshots/crud-dikunci.png)
+
+Rules kepemilikan ter-publish; hapus oleh akun lain ditolak di Rules Playground:
+
+![Penghapusan milik akun lain ditolak](screenshots/crud-akun-lain-ditolak.png)
+
 ## Struktur Folder
 
 ```
@@ -343,7 +455,7 @@ File: `test/widget_test.dart` — 11 kasus pengujian:
 Widget test memakai `EsTehApp(layanan: LayananMemori(), halamanAwal: HalamanUtama())`
 agar tidak memanggil Firebase.
 
-File: `test/logika_penjualan_test.dart` — 9 kasus: biaya bahan dari resep, toMap/fromMap,
+File: `test/logika_penjualan_test.dart` — 16 kasus (9 kasus Minggu 10 + 7 kasus ubah/hapus Minggu 11): biaya bahan dari resep, toMap/fromMap,
 pengurangan stok, total & laba kotor, stok tidak cukup ditolak, keranjang kosong,
 isolasi penjualan antar akun, status stok, dan profil pengguna.
 
@@ -358,7 +470,14 @@ File: `test/login_test.dart` — 9 kasus (termasuk nama lengkap wajib saat Dafta
 7. Halaman Masuk: email tidak valid dan password pendek ditolak
 8. Mode Daftar: ulangi password harus sama
 
-Total: **29 tes** (`flutter test`).
+### Tes CRUD (Minggu 11)
+- Unit: ubah valid (field audit tetap), ubah tanpa menambah jumlah tidak ditolak, ubah melebihi
+  stok ditolak, ubah ke menu lain mengembalikan bahan, hapus mengembalikan stok, status Dikunci
+  ditolak, penjualan akun lain ditolak.
+- Widget: Hapus → Batal (data tetap), Hapus → konfirmasi (data hilang), Ubah membuka halaman
+  yang sama dengan data lama, status Dikunci membuat menu nonaktif.
+
+Total: **40 tes** (`flutter test`).
 
 ## Style Guide
 
@@ -414,4 +533,7 @@ flutter test
   - Collection users, menu (+resep), bahan, penjualan dengan Security Rules `request.auth != null`
   - Tambah menu & penjualan ke Firestore; penjualan ditolak bila stok tidak cukup (transaction)
   - StreamBuilder real-time, penjualan terpisah per pengguna, data bertahan setelah refresh
-- Minggu 11 (rencana): edit & hapus menu, catat pembelian bahan, batalkan penjualan
+- Minggu 11: CRUD lengkap
+  - Ubah penjualan (halaman yang sama, mode ubah) dan hapus lewat dialog konfirmasi
+  - Hanya pemilik dan hanya status Tercatat; Rules kepemilikan ter-publish
+  - Stok bahan disesuaikan saat ubah dan dikembalikan saat hapus (transaction)

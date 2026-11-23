@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:es_teh_app/main.dart';
 import 'package:es_teh_app/pages/halaman_utama.dart';
+import 'package:es_teh_app/data/data_simulasi.dart';
 import 'package:es_teh_app/services/layanan_memori.dart';
 
 void main() {
@@ -277,5 +278,83 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Menu dan Resep'), findsOneWidget);
+  });
+
+  // ===== Minggu 11: ubah & hapus dari Laporan =====
+  group('Minggu 11 — aksi Ubah & Hapus di Laporan', () {
+    // Layar tinggi agar seluruh isi Laporan terbangun tanpa digulir
+    Future<void> bukaLaporanDenganSatuPenjualan(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1200, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await layanan.simpanPenjualan(
+        keranjang: {'menu1': 2},
+        gula: {'menu1': 'Normal'},
+        daftarMenu: layanan.menuSaatIni,
+      );
+      await pumpAplikasi(tester);
+      await tester.tap(find.text('Laporan').last);
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> pilihAksi(WidgetTester tester, String aksi) async {
+      await tester.tap(find.byKey(const Key('aksi-jual-1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(aksi).last);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('Hapus lalu Batal — dialog tertutup, data tetap ada', (tester) async {
+      await bukaLaporanDenganSatuPenjualan(tester);
+      await pilihAksi(tester, 'Hapus');
+
+      expect(find.text('Hapus penjualan?'), findsOneWidget);
+      await tester.tap(find.text('Batal'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Hapus penjualan?'), findsNothing);
+      expect(layanan.semuaPenjualan.length, 1);
+    });
+
+    testWidgets('Hapus dengan konfirmasi — data hilang, SnackBar berhasil', (tester) async {
+      await bukaLaporanDenganSatuPenjualan(tester);
+      await pilihAksi(tester, 'Hapus');
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Hapus'));
+      await tester.pumpAndSettle();
+
+      expect(layanan.semuaPenjualan, isEmpty);
+      expect(find.text('Penjualan dihapus — stok bahan dikembalikan'), findsOneWidget);
+    });
+
+    testWidgets('Ubah — halaman yang sama terisi data lama, lalu tersimpan', (tester) async {
+      await bukaLaporanDenganSatuPenjualan(tester);
+      await pilihAksi(tester, 'Ubah');
+
+      expect(find.text('Ubah Penjualan'), findsOneWidget);
+      expect(find.text('Simpan Perubahan'), findsOneWidget);
+      expect(find.text('Rp 10.000'), findsWidgets); // 2 × Es Teh Manis terisi
+
+      await tester.tap(find.text('Simpan Perubahan'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Perubahan tersimpan — Total Rp 10.000'), findsOneWidget);
+      expect(layanan.semuaPenjualan.single.diubahPada, isNotNull);
+    });
+
+    testWidgets('Status Dikunci — menu Ubah & Hapus nonaktif', (tester) async {
+      await bukaLaporanDenganSatuPenjualan(tester);
+      layanan.aturStatusPenjualan('jual-1', statusDikunci);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('aksi-jual-1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Hapus').last, warnIfMissed: false);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Hapus penjualan?'), findsNothing);
+      expect(layanan.semuaPenjualan.length, 1);
+    });
   });
 }
